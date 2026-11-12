@@ -1,0 +1,5 @@
+nonuni: non-uniform debt grid; nB 572 nz 75; 6000 steps from the main solution; floor 0.6
+nonuni: 6000 steps, resV 3.3e-03 resq 1.5e-02, 1427s
+non-uniform debt grid & 0.269 & 0.183 & 0.035 & 0.375 & 0.410 & 0.078 & 0.0000 & 0.005 & 3e-03 / 2e-02 \\
+binding 0.0088 | full-default issuing nodes 0 (max q nan, mass 0.0e+00) | mass full default 0.0e+00 | mass top 10% 0.0e+00 | floor rows 19 (mass 0.102) | max B with mass 0.624
+done 1428s

@@ -1,0 +1,4 @@
+illus rho 0.0600 wedge 210 bp d_first 0.089: 135 of 6600 starts captured
+   steady states reached: B0 in [0.934, 1.015], d0 in [0.220, 0.295], q(0) in [0.99000, 0.99917], c(0) in [1.0756, 1.0957]
+   right branches: B0 0.934 -> FULL at 1.411; B0 1.004 -> FULL at 1.397; B0 1.015 -> FULL at 1.394
+   294s

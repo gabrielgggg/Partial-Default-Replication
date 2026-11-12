@@ -1,0 +1,12 @@
+baseline       Bpd 0.4847 B* node 0.4750 first node 0.4850 d_first 0.5167 / 0.5188  Bfd 1.897 floor 0.890 full nan conv True res 1.0e-07/1.9e-09 19294 steps 23s
+gamma0 x 0.8   Bpd 0.4507 B* node 0.4400 first node 0.4500 d_first 0.5557 / 0.5575  Bfd 1.517 floor 0.785 full 1.110 conv True res 1.0e-07/2.8e-09 19226 steps 23s
+gamma0 x 1.2   Bpd 0.5144 B* node 0.5050 first node 0.5150 d_first 0.4869 / 0.4889  Bfd 2.276 floor 0.990 full nan conv True res 1.0e-07/8.6e-10 19346 steps 24s
+kappa = 0.45   Bpd 0.5528 B* node 0.5400 first node 0.5500 d_first 0.5167 / 0.5176  Bfd 2.163 floor 1.005 full nan conv True res 1.0e-07/2.1e-09 19449 steps 24s
+kappa = 0.65   Bpd 0.8687 B* node 0.8500 first node 0.8600 d_first 0.5167 / 0.5173  Bfd 3.400 floor nan full nan conv True res 1.0e-07/2.6e-09 20242 steps 25s
+gamma2 x 0.5   Bpd 0.3048 B* node 0.2950 first node 0.3050 d_first 0.4108 / 0.4124  Bfd 1.916 floor 0.710 full nan conv True res 1.0e-07/1.9e-09 18322 steps 22s
+gamma2 x 1.5   Bpd 0.6348 B* node 0.6250 first node 0.6350 d_first 0.5918 / 0.5941  Bfd 1.877 floor 1.040 full nan conv True res 1.0e-07/2.3e-09 19919 steps 24s
+rho = 0.05     Bpd 0.4847 B* node 0.4750 first node 0.4850 d_first 0.5167 / 0.5187  Bfd 1.897 floor 0.940 full nan conv True res 1.0e-07/2.2e-09 22552 steps 27s
+rho = 0.07     Bpd 0.4847 B* node 0.4750 first node 0.4850 d_first 0.5167 / 0.5188  Bfd 1.897 floor 0.860 full nan conv True res 1.0e-07/3.2e-09 17513 steps 21s
+delta = 0.12   Bpd 0.5836 B* node 0.5750 first node 0.5850 d_first 0.5167 / 0.5191  Bfd 2.284 floor 1.020 full nan conv False res 9.3e-05/3.7e-03 30000 steps 35s
+delta = 0.22   Bpd 0.3585 B* node 0.3500 first node 0.3600 d_first 0.5167 / 0.5201  Bfd 1.403 floor 0.705 full 1.030 conv True res 1.0e-07/8.5e-10 18666 steps 23s
+total 38s

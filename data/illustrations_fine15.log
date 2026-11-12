@@ -1,0 +1,5 @@
+parameters: g0 0.0759 g1 3.0665 g2 0.0815 ztilde -0.2864 rho 0.0618 kappa 0.3727 delta 0.1525 r=lam 0.0392; OU mu 0.1994 sigma 0.0729 sd 0.1154; q_floor 0.6
+closed forms at z=0: F 0.97970  B_pd(0,1) 0.4847  d_first 0.5167  B_fd(0,1) 1.8967  cbar 0.9810  beta 0.1724  alpha 0.5408  Sigma1 -0.2035  Q1 0.4255  sqrt-law coefficient 0.1487  a 0.0811  xi(1)/a 1.484
+deterministic (500/unit, Bmax 1.5): converged True, residuals 1.0e-07 / 4.8e-09, 19276 steps, 109s
+  [det_fine15] z=+0.0000: first default node 0.4840 (d there 0.5174); last positive-drift node 0.4800; full default from 1.368; floor binds from B = 0.888; q(Bmax) 0.3440; drift range [-0.1216, +0.0949]
+done
