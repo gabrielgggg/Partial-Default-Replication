@@ -1,15 +1,16 @@
 """Branching march for the deterministic case.
 
 At the default threshold the node equations have several roots (a no-default branch, a partial
-default branch, and so on). Following only the root nearest in q to the previous node, as
-pdmarch.march does, can select the wrong branch, after which every consistency check fails.
+default branch, and so on). Following only the root nearest in q to the previous node can select
+the wrong branch, after which every consistency check fails.
 Here, at every next node, a root is kept if the previous node keeps its own candidate once the
 next node value is known (the alternative one-sided candidate at the previous node, evaluated
 with that V, must not beat the candidate chosen there). All consistent roots are followed
 (branching, with a cap). If no root is consistent, the nearest one is followed and the
 violation is recorded; the first such violation above the steady state is `Bhat`, the
-resolution limit of the first-order upwind scheme (see pddiag.py).
-Library module, imported by wedge_search.py.
+resolution limit of the first-order upwind scheme.
+
+Reads and writes no file. Imported by wedge_search.py: solve_deterministic(model), to_result(model, solution).
 """
 
 from __future__ import annotations

@@ -1,16 +1,23 @@
-"""Scan starting points at zero debt for capture by a partial-default steady state.
+"""Starting points at zero debt that a partial-default steady state captures, in the self-fulfilling example.
 
-Integrates forward from a grid of (q(0), c(0)), records which starts are captured, and checks the right branch
-at a few captured steady states. Writes data/pdss/<which>_rho<rho>.npz and prints a summary.
-Usage: python code/pdss_sweep.py <illus|calib> rho
+Deterministic model at the parameters of the example (discount rate 0.06). Integrates forward from a grid of
+starting prices q(0) and consumption levels c(0) at zero debt, records which starts are captured and the range
+of steady states they reach, and follows the right branch at a few of these steady states.
+
+Reads no file. Writes data/pdss/sweep_0.06.txt (the summary; text_numbers.py reads the range of steady states).
+Usage: python code/pdss_sweep.py
 """
-import os, sys, time
-import numpy as np
-from pdss_shoot import illus, calib
-from pdss_fwd2 import fwd, right
+import os
+import time
 
-which, rho = sys.argv[1], float(sys.argv[2])
-m = illus(rho) if which == "illus" else calib(rho)
+import numpy as np
+
+from paths import DATA
+from pdss_fwd2 import fwd, right
+from pdss_shoot import illus
+
+RHO = 0.06
+m = illus(RHO)
 # grid of starting points, dense in q(0) near 1
 qs = np.concatenate([np.linspace(0.90, 0.99, 10), np.linspace(0.991, 0.99999, 12)])
 cs = np.linspace(1.0005, 1.30, 300)
@@ -23,7 +30,7 @@ for q0 in qs:
 # captured starts and the steady states they reach
 res = np.array(res)
 cap = res[res[:, 2] == 1]
-lines = [f"{which} rho {rho:.4f} wedge {1e4 * (rho - m.r):.0f} bp d_first {m.d_first():.3f}: {len(cap)} of {len(res)} starts captured"]
+lines = [f"illus rho {RHO:.4f} wedge {1e4 * (RHO - m.r):.0f} bp d_first {m.d_first():.3f}: {len(cap)} of {len(res)} starts captured"]
 okR = []
 if len(cap):
     B0s = cap[:, 3]
@@ -40,6 +47,7 @@ if len(cap):
                  f"q(0) in [{cap[:, 0].min():.5f}, {cap[:, 0].max():.5f}], c(0) in [{cap[:, 1].min():.4f}, {cap[:, 1].max():.4f}]")
     lines.append("   right branches: " + "; ".join(f"B0 {b:.3f} -> {c} at {e:.3f}" for b, c, e in okR))
 lines.append(f"   {time.time() - t0:.0f}s")
-from paths import DATA
-np.savez(os.path.join(DATA, "pdss", f"{which}_rho{rho:.4f}.npz"), res=res, rho=rho)
-print("\n".join(lines), flush=True)
+txt = "\n".join(lines) + "\n"
+os.makedirs(os.path.join(DATA, "pdss"), exist_ok=True)
+open(os.path.join(DATA, "pdss", "sweep_0.06.txt"), "w", encoding="utf-8").write(txt)
+print(txt, flush=True)

@@ -1,7 +1,8 @@
 """
 pdtimestep.py -- the implicit time-stepping solver that iterates V and q jointly to a stationary
-point (the scheme described in Appendix B of the paper). Each step takes the policy explicitly from
-(V^k, q^k) and solves for V^{k+1} and q^{k+1} implicitly in the generator A(S^k):
+point (the scheme of the paper, described in its appendix on the numerical implementation). Each
+step takes the policy explicitly from (V^k, q^k) and solves for V^{k+1} and q^{k+1} implicitly in
+the generator A(S^k):
 
     [(rho + 1/dt) I - A] V^{k+1} = u + V^k / dt
     [(xi(d) + 1/dt) I - A] q^{k+1} = (1-d)(lam+delta) + q^k / dt
@@ -38,11 +39,24 @@ def _zero_drift_override(model, mask, S, c, d, u, which, q, n_golden):
 
 def solve_timestep(model: Model, V0=None, q0=None, *, dt=0.001, maxit=200000, tolV=1e-8, tolq=1e-9,
                    n_golden=28, verbose=True, print_every=5000, q_init="one", ergodic=True,
-                   dt_adapt=False, dt_max=0.05, save_path=None,
+                   dt_adapt=False, dt_max=0.05, dt_grow=1.02, save_path=None, sticky=0.0,
+                   freeze_flips=0, freeze_window=30, stop_fn=None, stop_every=100, sweeps=False,
                    chatter_fix=False, chatter_window=30, chatter_flips=3, chatter_hold=200) -> Result:
     """Joint implicit time stepping of V and q from (V0, q0) with step dt, until both residuals are
     below tolerance or maxit steps. Returns a Result (with the ergodic density if ergodic and nz > 1).
 
+    dt_adapt: the time step grows by the factor dt_grow each step, from dt up to dt_max (small steps first, while
+    the policy settles).
+    sticky: a node keeps its upwind branch from the step before unless another branch has a Hamiltonian higher by
+    more than `sticky` (pdmodel.policies); 0 is the plain comparison.
+    freeze_flips: a node whose branch changed at least this many times within the last `freeze_window` steps keeps
+    the branch it has from then on (0: off). Counting starts when the time step has reached dt_max, so that the
+    changes of the early transient do not count. These are nodes where two branches tie and each choice moves the price
+    enough to favor the other. The number of such nodes is returned as Result.n_frozen, their mask as Result.frozen.
+    sweeps: solve the two linear systems of a step by line sweeps (Model.solve_shifted), with the sparse direct solve
+    as the fallback; False (the default): the direct solve. Result.direct_solves counts the fallbacks, Result.passes the sweeps.
+    stop_fn(model, S, d, A, it) -> bool, called every `stop_every` steps: return True to abandon the solve (the
+    result then has converged = False and Result.stopped = True).
     chatter_fix: nodes whose drift sign flipped at least `chatter_flips` times within the last
     `chatter_window` steps are assigned the zero-drift candidate for the next `chatter_hold` steps
     (sliding-mode / Filippov convention at a price cliff: the state rests at the cliff node).
@@ -68,10 +82,27 @@ def solve_timestep(model: Model, V0=None, q0=None, *, dt=0.001, maxit=200000, to
     converged = False
     rV_prev = np.inf
     it = 0
+    which = None
+    stopped = False
+    n_direct = n_passes = 0
+    tau = np.full((model.nB, model.nz), float(sticky))
+    frozen = np.zeros((model.nB, model.nz), dtype=bool)
+    changes = np.zeros((model.nB, model.nz), dtype=np.int32)
+    change_hist = []
     for it in range(1, maxit + 1):
         # policies given (V, q): consumption from the first-order condition, d and S by maximizing
         # the Hamiltonian
-        S, c, d, u, Hval, which, S_free, d_free = model.policies(V, q, n_golden)
+        w_old = which
+        S, c, d, u, Hval, which, S_free, d_free = model.policies(V, q, n_golden, which, tau)
+        # hold the branch of nodes that keep alternating
+        if freeze_flips and w_old is not None and (not dt_adapt or dt >= dt_max):   # only once the ramp is over
+            ch = which != w_old
+            change_hist.append(ch); changes += ch
+            if len(change_hist) > freeze_window:
+                changes -= change_hist.pop(0)
+            new = (changes >= freeze_flips) & ~frozen
+            if new.any():
+                frozen |= new; tau[new] = 1.0e30
         # optional: hold chattering nodes at zero drift
         if chatter_fix:
             if S_prev is not None:
@@ -106,25 +137,31 @@ def solve_timestep(model: Model, V0=None, q0=None, *, dt=0.001, maxit=200000, to
         if rV < tolV and rq < tolq:
             converged = True
             break
-        # optional adaptive step: grow while the HJB residual falls, shrink otherwise
+        if stop_fn is not None and it % stop_every == 0 and stop_fn(model, S, d, A, it):
+            stopped = True
+            break
         if dt_adapt:
-            if rV < rV_prev:
-                dt = min(dt * 1.02, dt_max)
-            else:
-                dt = max(dt * 0.7, 1e-4)
+            dt = min(dt * dt_grow, dt_max)         # a ramp: small steps first, while the policy settles
             rV_prev = rV
         # implicit step for V, then for q (q kept in (0, 1])
-        Vn = spla.spsolve((par.rho + 1.0 / dt) * I - A, uf + Vf / dt)
-        qn = spla.spsolve(sp.diags(xi + 1.0 / dt, format="csc") - A, (1.0 - df) * coupon + qf / dt)
-        V = Vn.reshape(model.nB, model.nz)
+        if sweeps:
+            V, n1 = model.solve_shifted(par.rho + 1.0 / dt, S, uf + Vf / dt, V, A)
+            qn, n2 = model.solve_shifted(xi + 1.0 / dt, S, (1.0 - df) * coupon + qf / dt, q, A)
+            n_direct += (n1 < 0) + (n2 < 0); n_passes += max(n1, 0) + max(n2, 0)
+        else:
+            V = spla.spsolve((par.rho + 1.0 / dt) * I - A, uf + Vf / dt).reshape(model.nB, model.nz)
+            qn = spla.spsolve(sp.diags(xi + 1.0 / dt, format="csc") - A, (1.0 - df) * coupon + qf / dt)
         q = np.clip(qn, 1e-12, 1.0).reshape(model.nB, model.nz)
     elapsed = time.perf_counter() - t0
     # policies, generator, and ergodic density at the final (V, q)
-    S, c, d, u, Hval, which, S_free, d_free = model.policies(V, q, n_golden)
+    S, c, d, u, Hval, which, S_free, d_free = model.policies(V, q, n_golden, which, tau)
     if chatter_fix and (hold > 0).any():
         _zero_drift_override(model, hold > 0, S, c, d, u, which, q, n_golden)
     A = model.assemble(S)
     if verbose:
         print(f"{'converged' if converged else 'NOT converged'} after {it} steps, {elapsed:.0f}s; resV {rV:.2e} resq {rq:.2e}")
     g = ergodic_density(model, A) if (ergodic and model.nz > 1) else None
-    return Result(model, V, q, S, c, d, which, S_free, d_free, A, g, converged, it, rV, rq, hist, elapsed)
+    res = Result(model, V, q, S, c, d, which, S_free, d_free, A, g, converged, it, rV, rq, hist, elapsed)
+    res.frozen = frozen; res.n_frozen = int(frozen.sum()); res.stopped = stopped
+    res.direct_solves = int(n_direct); res.passes = int(n_passes)
+    return res

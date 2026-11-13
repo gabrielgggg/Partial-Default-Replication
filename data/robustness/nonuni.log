@@ -1,0 +1,7 @@
+nonuni: non-uniform debt grid; nB 760 nz 75; standard 0.575 band 0.03; at most 6000 steps from the main solution
+nonuni: 6000 steps, converged False, resV 5.1e-09 resq 2.0e-07, 828s
+residuals on the 24938 nodes with mass above 1e-10: 5.2e-09 / 1.7e-07; largest debt with such mass 0.771; nodes with pricing residual above 1e-6: 0
+loss 0.2608  mass top 0.0000  unresolved 0.0080
+standard binds on 0.0187; mass on the last two nodes 1.5e-25; issuing in full default 0.0e+00; max B with mass 0.742; tie nodes 1 (mass 1.2e-04)
+non-uniform debt grid & 0.300 & 0.203 & 0.029 & 0.389 & 0.478 & 0.261 & 0.0000 & 0.008 & 5e-09 / 2e-07 \\
+done 831s

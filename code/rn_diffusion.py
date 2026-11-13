@@ -1,6 +1,6 @@
 r"""Self-fulfilling partial default with a risk-neutral sovereign and an OU endowment.
 
-Class of equilibria: the block construction of Proposition A.9 with shocks. Lenders expect the sovereign to settle
+Class of equilibria: the block construction of the deterministic model, with shocks. Lenders expect the sovereign to settle
 at a debt level B° (independent of z) and stay there forever; from any B < B° it issues a block to B° at once.
 
   At B°: S = 0, d°(z) = d*(B°, z, q°(z)) (static rule), and the price solves the ODE in z
@@ -14,8 +14,8 @@ at a debt level B° (independent of z) and stay there forever; from any B < B° 
          parabolic in B (march upward, implicit in L_z), and the drift from the pricing equation,
          S = [xi(d) q - (1-d)(lam+delta) - L_z q] / q_B.  Attraction: S < 0 and q_B < 0 above B°.
   Standard: issuance at B° is a(d°)B° > 0, so q°(z) >= q_floor for every z.
-At sigma = 0 the conditions are those of Proposition A.9: Theta(d) <= rho - r < Omega(d), q_r(d) >= q_floor.
-Library module (illustrative parameters by default), imported by rn_scan_free.py and region.py.
+At sigma = 0 the conditions reduce to those of the deterministic model: Theta(d) <= rho - r < Omega(d), q_r(d) >= q_floor.
+Reads and writes no file. The default parameters are those of the self-fulfilling example. Imported by region.py.
 """
 from __future__ import annotations
 
@@ -141,11 +141,6 @@ class RN:
             return R / self.rho
         return spla.spsolve((self.rho * sp.identity(self.nz) - self.L).tocsc(), R)
 
-    def D0(self, B0, q0, d0):
-        """D(0, z): rho V(0,z) - y - L_z V(0,z), with V(0,z) = V°(z) + q°(z) B0. Nonnegative = the block is optimal."""
-        Lq = self.L @ q0 if self.nz > 1 else np.zeros(1)
-        return self.Rstar(B0, q0, d0) + self.rho * q0 * B0 - self.y - B0 * Lq
-
     def P(self, B, q):
         """xi(d) q - (1-d)(lam+delta) at the static default rule."""
         d = self.dstar(B, q)
@@ -226,7 +221,8 @@ class RN:
            (i)   no buyback-and-wait at B°: V°(z) >= V(0,z) - q(0,z) B°;
            (ii)  standing still not better on (0, B°): D(B,z) = rho V - R*(B,z,q) - L V >= 0, with
                  V = max(V(0) - q(0) B, V° + q° (B° - B)) and q the price of the chosen destination;
-           (iii) attraction, continuation and floor at B° as in check()."""
+           (iii) at B°: the price is above the standard, the drift above B° is negative (attraction), and the
+                 upward march of the price equation succeeds (continuation)."""
         B0 = float(self.B_of_d(d_ref))
         q0, d0, res = self.price_newton(B0, self.qr(d_ref))
         if res > 1e-8:
@@ -258,7 +254,7 @@ class RN:
             D = self.rho * V - self.Rstar(B, q) - LV
             Dmin = min(Dmin, float(D[inner].min()))
         out["Dmin_free"] = Dmin
-        # (iii) attraction and floor; if all hold, march upward for continuation
+        # (iii) attraction and the standard; if all hold, march upward for continuation
         SB, qB = self.S_slope(B0, q0)
         out["SBmax"] = float(SB[inner].max())
         ok_static = out["floor"] and out["any_jump"] and out["buyback_min"] >= -1e-12 and Dmin >= -1e-10 and out["SBmax"] < 0
@@ -267,45 +263,10 @@ class RN:
         return out
 
     def B_of_d(self, d):
-        """deterministic steady-state debt with intensity d at z = 0 (Proposition A.9)"""
+        """Deterministic steady-state debt with intensity d at z = 0."""
         F = 1 - self.g2 * (0.0 - self.zt)
         return self.g0 * self.g1 * F * d ** (self.g1 - 1) * self.xi(d) / ((1 - self.kappa) * self.cs ** 2)
 
     def qr(self, d):
         """Lenders' stationary price at a constant default intensity, deterministic case."""
         return (1 - d) * self.cs / self.xi(d)
-
-    def check_d(self, d_ref, march=True):
-        """the member of the family indexed by the deterministic intensity d_ref: B° = B(d_ref), price root
-        continued from q_r(d_ref)"""
-        B0 = float(self.B_of_d(d_ref))
-        q0, d0, res = self.price_newton(B0, self.qr(d_ref))
-        if res > 1e-8:
-            # Newton stalls where d* jumps from 0 to d_first across z; the largest fixed point of the monotone map is
-            # exact. Accept it if it is a partial-default locus (d > 0 somewhere, price not collapsed).
-            qa, da, _ = self.price_at(B0, 1.0)
-            Ga = self.xi(da) * qa - (1 - da) * self.cs - (self.L @ qa if self.nz > 1 else 0.0)
-            if da.max() > 0 and qa.min() > 0.05 and np.max(np.abs(Ga)) < 1e-9:
-                q0, d0, res = qa, da, float(np.max(np.abs(Ga)))
-            elif qa.min() <= 0.05:
-                out = dict(B0=B0, d_ref=d_ref, price_res=np.inf, collapsed=True, Dmin=np.nan, floor=False,
-                           SBmax=np.nan, qmin=float(qa.min()), dmean=1.0, zD=np.nan, spread_mean=np.nan)
-                return out
-        out = self.check(B0, march, q0=q0, d0=d0)
-        out["d_ref"], out["price_res"] = d_ref, res
-        return out
-
-    def check(self, B0, march=True, q0=None, d0=None):
-        """Immediate block from zero debt to B0: D(0, z) >= 0, floor, attraction, and continuation above B0."""
-        if q0 is None:
-            q0, d0, it = self.price_at(B0)
-        D = self.D0(B0, q0, d0)
-        out = dict(B0=B0, q0=q0, d0=d0, Dmin=float(D.min()), zD=float(self.z[np.argmin(D)]),
-                   floor=bool(q0.min() >= self.qf), qmin=float(q0.min()), dmean=float(self.gz @ d0),
-                   spread_mean=float(self.gz @ (self.cs * (1 / q0 - 1))))
-        SB, qB = self.S_slope(B0, q0)
-        inner = slice(1, -1) if self.nz > 2 else slice(None)   # the reflecting nodes are a truncation artifact
-        out["SBmax"] = float(SB[inner].max()); out["zSB"] = float(self.z[inner][np.argmax(SB[inner])])
-        if march and out["Dmin"] >= 0 and out["floor"] and out["SBmax"] < 0:
-            out["march"] = self.march_up(B0, q0)
-        return out

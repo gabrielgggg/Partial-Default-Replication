@@ -1,7 +1,7 @@
 """Forward integration in B of the deterministic ODE from a starting point (q, c).
 
 Uses explicit RK4 with a step that resolves the fast consumption mode, whose rate is c (rho-r) / (nu q S^2).
-Library module, imported by pdss_band.py, pdss_sweep.py, and pdss_threshold.py. fwd classifies the start:
+The model m is a pdss_shoot.Det. fwd classifies the start:
   CAPT  the drift falls to Smin with the price slope P/S at the slope condition and d > 0: captured by a
         partial-default steady state (the path approaches the singular curve along a leaf)
   BRK   the drift falls to Smin with the price slope off the slope condition (breakdown)
@@ -9,17 +9,18 @@ Library module, imported by pdss_band.py, pdss_sweep.py, and pdss_threshold.py. 
   QOUT  the price leaves (0, 1]
   NEG   the drift is not positive at the start
 right follows the right branch of a candidate steady state.
+
+Reads and writes no file. Imported by pdss_sweep.py and pdss_threshold.py.
 """
 import numpy as np
 
 
-def fwd(m, q0, c0, B0=0.0, Bend=1.5, Smin=1e-4, hmax=2e-3, keep=False):
+def fwd(m, q0, c0, B0=0.0, Bend=1.5, Smin=1e-4, hmax=2e-3):
     """Integrate from (B0, q0, c0) until the drift falls to Smin, B reaches Bend, or q leaves (0, 1]; classify the end."""
     B, y = B0, np.array([q0, c0], dtype=float)
     S = m.S_of(B, y)
     if S <= Smin:
-        return dict(cls="NEG", B=B, q=q0, c=c0, S=S, d=0.0, ratio=np.nan, slope=np.nan, path=None)
-    rows = [(B, q0, c0, S)] if keep else None
+        return dict(cls="NEG", B=B, q=q0, c=c0, S=S, d=0.0, ratio=np.nan, slope=np.nan)
     nudge = 0
     while True:
         q, c = y
@@ -37,12 +38,10 @@ def fwd(m, q0, c0, B0=0.0, Bend=1.5, Smin=1e-4, hmax=2e-3, keep=False):
         ynew = y + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
         if m.dstar(B + h, ynew[0]) > 0 and d == 0 or m.dstar(B + h, ynew[0]) == 0 and d > 0:
             if h > 1e-9 and nudge < 60:                      # refine the step across a regime switch
-                hmax_saved = hmax; hmax = h / 4; nudge += 1; continue
+                hmax = h / 4; nudge += 1; continue
         hmax = 2e-3 if nudge else hmax
         nudge = 0
         B, y = B + h, ynew
-        if keep:
-            rows.append((B, y[0], y[1], m.S_of(B, y)))
     # compare the price slope P/S with the slope condition at the end point
     q, c = y; d = m.dstar(B, q); S = m.S_of(B, y)
     ratio = m.P(B, q, d) / S if S > 0 else np.nan
@@ -53,7 +52,7 @@ def fwd(m, q0, c0, B0=0.0, Bend=1.5, Smin=1e-4, hmax=2e-3, keep=False):
         cls = "OVER"
     else:
         cls = "QOUT"
-    return dict(cls=cls, B=B, q=q, c=c, S=S, d=d, ratio=ratio, slope=slope, path=np.array(rows) if keep else None)
+    return dict(cls=cls, B=B, q=q, c=c, S=S, d=d, ratio=ratio, slope=slope)
 
 
 def right(m, loc, eps=2e-3, Bend=2.0, hmax=2e-3):

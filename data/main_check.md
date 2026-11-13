@@ -1,34 +1,85 @@
-# zero-drift locus and ergodic set of ou_main.npz: floor 0.6, grid 201 x 75, residuals 3.4e-03 / 1.9e-02
+# zero-drift locus and ergodic set of the main solution: standard 0.575, band 0.03, grid 201 x 75, residuals 2.0e-09 / 9.2e-09
 
-binding 0.0093 | full-default issuing nodes 0 (max q nan, mass 0.0e+00) | mass full default 0.0e+00 | mass top 10% 0.0e+00 | floor rows 24 (mass 0.178) | max B with mass 0.640
+standard binds on 0.0198 | mass on the last 2 debt nodes 0.0e+00 | full-default issuing nodes 0 (max q nan, mass 0.0e+00) | mass full default 1.0e-03 | mass top 10% 3.9e-19 | floor rows 0 (mass 0.000) | max B with mass 0.775
 
-E[B] 0.2568; P(d>0) 0.2744; atom at 0 0.0534; mass with q below floor 0.0093
+E[B] 0.2842; P(d>0) 0.3029; atom at 0 0.0582; mass with q below the standard 0.0117; mass in the band 0.0211
 
 ## zero-drift locus
 
 | z | zero-drift B | q there | d there | regime |
 |---|---|---|---|---|
-| -0.289 | 0.475 | 0.600 | 0.65 | floor |
-| -0.257 | 0.495 | 0.600 | 0.65 | floor |
-| -0.226 | 0.525 | 0.600 | 0.66 | floor |
-| -0.195 | 0.560 | 0.601 | 0.67 | floor |
-| -0.164 | 0.600 | 0.600 | 0.68 | floor |
-| -0.133 | 0.640 | 0.601 | 0.70 | floor |
-| -0.101 | 0.670 | 0.605 | 0.70 | pd |
-| -0.070 | 0.480 | 0.727 | 0.57 | pd |
-| -0.039 | 0.340 | 0.878 | 0.00 | nodef |
-| -0.008 | 0.280 | 0.932 | 0.00 | nodef |
-| +0.023 | 0.215 | 0.959 | 0.00 | nodef |
-| +0.055 | 0.125 | 0.975 | 0.00 | nodef |
-| +0.086 | 0.030 | 0.983 | 0.00 | nodef |
-| +0.117 | nan | nan | nan | none |
-| +0.148 | nan | nan | nan | none |
-| +0.179 | nan | nan | nan | none |
-| +0.211 | nan | nan | nan | none |
-| +0.242 | nan | nan | nan | none |
-| +0.273 | nan | nan | nan | none |
-
-## impulse response to z - 0.10
-
-debt peak 6.11% of mean output at 5.9 years; spread on impact 174 bp; d on impact 0.093, at 2y 0.092, at 5y 0.081
-cumulated to the peak: extra issuance 8.44% of output, extra defaulted coupons 4.30% (arrears 1.60%); issuance exceeds defaulted coupons until year 5.5
+| -0.266 | 0.560 | 0.579 | 0.88 | pd |
+| -0.259 | 0.560 | 0.579 | 0.87 | pd |
+| -0.252 | 0.565 | 0.579 | 0.87 | pd |
+| -0.244 | 0.565 | 0.580 | 0.86 | pd |
+| -0.237 | 0.575 | 0.579 | 0.87 | pd |
+| -0.230 | 0.580 | 0.579 | 0.87 | pd |
+| -0.223 | 0.585 | 0.580 | 0.87 | pd |
+| -0.216 | 0.590 | 0.580 | 0.87 | pd |
+| -0.208 | 0.595 | 0.581 | 0.87 | pd |
+| -0.201 | 0.605 | 0.579 | 0.88 | pd |
+| -0.194 | 0.610 | 0.580 | 0.88 | pd |
+| -0.187 | 0.615 | 0.581 | 0.87 | pd |
+| -0.180 | 0.625 | 0.580 | 0.88 | pd |
+| -0.173 | 0.630 | 0.581 | 0.88 | pd |
+| -0.165 | 0.640 | 0.579 | 0.89 | pd |
+| -0.158 | 0.645 | 0.581 | 0.88 | pd |
+| -0.151 | 0.655 | 0.579 | 0.89 | pd |
+| -0.144 | 0.660 | 0.581 | 0.89 | pd |
+| -0.137 | 0.670 | 0.579 | 0.90 | pd |
+| -0.129 | 0.675 | 0.581 | 0.89 | pd |
+| -0.122 | 0.685 | 0.580 | 0.90 | pd |
+| -0.115 | 0.690 | 0.582 | 0.89 | pd |
+| -0.108 | 0.700 | 0.580 | 0.90 | pd |
+| -0.101 | 0.705 | 0.583 | 0.89 | pd |
+| -0.093 | 0.715 | 0.581 | 0.90 | pd |
+| -0.086 | 0.725 | 0.580 | 0.91 | pd |
+| -0.079 | 0.730 | 0.582 | 0.90 | pd |
+| -0.072 | 0.560 | 0.748 | 0.67 | pd |
+| -0.065 | 0.505 | 0.796 | 0.60 | pd |
+| -0.058 | 0.400 | 0.876 | 0.48 | pd |
+| -0.050 | 0.390 | 0.891 | 0.46 | pd |
+| -0.043 | 0.345 | 0.925 | 0.00 | nodef |
+| -0.036 | 0.335 | 0.936 | 0.00 | nodef |
+| -0.029 | 0.335 | 0.941 | 0.00 | nodef |
+| -0.022 | 0.335 | 0.946 | 0.00 | nodef |
+| -0.014 | 0.320 | 0.954 | 0.00 | nodef |
+| -0.007 | 0.305 | 0.960 | 0.00 | nodef |
+| +0.000 | 0.295 | 0.965 | 0.00 | nodef |
+| +0.007 | 0.280 | 0.970 | 0.00 | nodef |
+| +0.014 | 0.265 | 0.974 | 0.00 | nodef |
+| +0.022 | 0.245 | 0.977 | 0.00 | nodef |
+| +0.029 | 0.230 | 0.980 | 0.00 | nodef |
+| +0.036 | 0.205 | 0.983 | 0.00 | nodef |
+| +0.043 | 0.185 | 0.985 | 0.00 | nodef |
+| +0.050 | 0.155 | 0.987 | 0.00 | nodef |
+| +0.058 | 0.130 | 0.989 | 0.00 | nodef |
+| +0.065 | 0.100 | 0.990 | 0.00 | nodef |
+| +0.072 | 0.070 | 0.991 | 0.00 | nodef |
+| +0.079 | 0.045 | 0.992 | 0.00 | nodef |
+| +0.086 | 0.025 | 0.993 | 0.00 | nodef |
+| +0.093 | 0.005 | 0.994 | 0.00 | nodef |
+| +0.101 | 0.000 | 0.994 | 0.00 | nodef |
+| +0.108 | 0.960 | 0.579 | 0.96 | pd |
+| +0.115 | 0.965 | 0.587 | 0.94 | pd |
+| +0.122 | 0.975 | 0.586 | 0.95 | pd |
+| +0.129 | 0.985 | 0.585 | 0.95 | pd |
+| +0.137 | 0.995 | 0.584 | 0.95 | pd |
+| +0.144 | nan | nan | nan | none |
+| +0.151 | nan | nan | nan | none |
+| +0.158 | nan | nan | nan | none |
+| +0.165 | nan | nan | nan | none |
+| +0.173 | nan | nan | nan | none |
+| +0.180 | nan | nan | nan | none |
+| +0.187 | nan | nan | nan | none |
+| +0.194 | nan | nan | nan | none |
+| +0.201 | nan | nan | nan | none |
+| +0.208 | nan | nan | nan | none |
+| +0.216 | nan | nan | nan | none |
+| +0.223 | nan | nan | nan | none |
+| +0.230 | nan | nan | nan | none |
+| +0.237 | nan | nan | nan | none |
+| +0.244 | nan | nan | nan | none |
+| +0.252 | nan | nan | nan | none |
+| +0.259 | nan | nan | nan | none |
+| +0.266 | nan | nan | nan | none |

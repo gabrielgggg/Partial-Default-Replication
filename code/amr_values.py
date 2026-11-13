@@ -1,8 +1,8 @@
 """amr_values.py -- the values taken from Arellano, Mateos-Planas, and Rios-Rull (2023, JPE).
 
 Every number below is copied from their published paper: the data column and the model column of their Table 4,
-the weights of their footnote 22, and the number of digits they print. Nothing in this file is computed from data.
-Scripts that need one of these values import it from here.
+the weights of their footnote 22, and the parameter values of their Table 3. Nothing in this file is computed
+from data. Scripts that need one of these values import it from here.
 """
 # Table 4, data column, in the units of pdmoments.moments
 AMR_DATA = dict(pd_freq=0.36, pd_mean_cond=0.38, pd_sd_cond=0.22, debt_y_mean=0.32, debt_y_sd=0.18,
@@ -18,8 +18,13 @@ AMR_MODEL = dict(pd_freq=0.37, pd_mean_cond=0.39, pd_sd_cond=0.19, debt_y_mean=0
 TARGETS = ["pd_freq", "pd_mean_cond", "pd_sd_cond", "debt_y_mean", "debt_y_sd", "ds_y_mean", "ds_y_sd",
            "dd_y_mean", "spread_sd", "y_persist", "y_sd"]
 WEIGHTS = dict(dd_y_mean=3.0, spread_sd=1.25)
-# one unit of the last digit they print for each target
-REPORTED_PRECISION = dict(pd_freq=0.01, pd_mean_cond=0.01, pd_sd_cond=0.01, debt_y_mean=0.01, debt_y_sd=0.01,
-                          ds_y_mean=0.001, ds_y_sd=0.001, dd_y_mean=0.001, spread_sd=0.001, y_persist=0.01, y_sd=0.01)
+# Table 3 and the text above it: the two estimated parameters we take as given, and the risk-free rate they fix.
+# A period is one year in their model.
+AMR_KAPPA = 0.70           # debt recovery factor
+AMR_DELTA_ANNUAL = 0.88    # decay parameter: the coupons of a bond shrink by this factor each year
+AMR_R_GROSS = 1.04         # gross risk-free interest rate
+# Table 3, the other seven estimated parameters, as printed in the calibration table of our paper next to ours.
+# Their discount factor is 0.954; the discount rate shown is -ln(0.954).
+AMR_PARAMS = dict(g0="0.0476", g1="2", g2="0.12", ystar="0.938", rho="0.047", rho_z="0.875", sig_eps="0.052")
 # benchmark: the loss of their model column against their data column under their weights (0.2276)
 AMR_LOSS = sum(WEIGHTS.get(k, 1.0) * ((AMR_MODEL[k] - AMR_DATA[k]) / AMR_DATA[k]) ** 2 for k in TARGETS)

@@ -1,15 +1,15 @@
-"""moments_sav.py -- the paper's moments (pdmoments.combined_moments) for a solution of the saving
-variant, which may hold assets (B < 0). Output is net of default costs when pdmoments.NET_OUTPUT (the
-paper). Two differences from pdmoments, both inactive when B >= 0:
-- debt, debt due, debt service, and defaulted coupons use gross debt max(B, 0): a sovereign with assets
-  has no debt and no debt service;
+"""Moments of a solution that may hold assets (B < 0), with the definitions of pdmoments.combined_moments.
+
+Output is net of default costs, as in pdmoments. Two differences from pdmoments, both inactive when B >= 0:
+- debt, debt due, debt service, and defaulted coupons use gross debt max(B, 0): a sovereign with assets has
+  no debt and no debt service;
 - the spread in a state with B < 0 is the spread at which the sovereign would issue at zero debt, q(0, z),
-  which is how the paper's solution treats its atom at B = 0.
-Everything else (16 paths of 25,000 years, annual accounting, seeds, ergodic/simulated split) is as in
-pdmoments.
+  which is how the solution without saving treats its atom at B = 0.
+Everything else (16 paths of 25,000 years, annual accounting, seeds, the split between ergodic and simulated
+moments) is as in pdmoments.
+
+Reads and writes no file. Imported by tab_saving.py: combined_sav(solution, par, mu, sigma).
 """
-import os, sys
-HERE = os.path.dirname(os.path.abspath(__file__))
 import numpy as np
 from numba import njit, prange
 import pdmoments as PM
@@ -89,12 +89,12 @@ def ergodic_sav(B, z, q, d, c, g, par):
 
 
 def combined_sav(sol, par, mu, sigma, n_paths=16, T_years=25000, steps_per_year=100, seed=1, burn=1000):
-    """Moments of a saved saving-variant solution (dict with B, z, S, c, d, q, g): ergodic for
+    """Moments of a saved solution with or without saving (dict with B, z, S, c, d, q, g): ergodic for
     pdmoments.ERGODIC_KEYS, simulated for pdmoments.SIM_KEYS, the loss, and the ergodic mass on B < 0.
     Returns (M, across-path standard deviations)."""
     B, z = sol["B"], sol["z"]
     E = ergodic_sav(B, z, sol["q"], sol["d"], sol["c"], sol["g"], par)
-    B0 = 0.5 * (B[0] + B[-1]) * 0.5 if B[0] >= 0 else 0.25        # paper's start for B >= 0 grids
+    B0 = 0.5 * (B[0] + B[-1]) * 0.5 if B[0] >= 0 else 0.25        # the start of pdmoments on grids with B >= 0
     out = _paths(sol["S"], sol["d"], sol["c"], sol["q"], B, z, mu, sigma, T_years + burn, steps_per_year,
                  B0, 0.0, seed, par.delta + par.lam, par.r, par.delta, n_paths, *PM._phi_args(par))
     names = ["y", "cons", "debt_due", "debt_service", "def_coupons", "pd", "B", "spread", "d_eoy", "B_eoy", "z_eoy"]

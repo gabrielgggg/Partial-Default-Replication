@@ -3,8 +3,8 @@ pdmodel.py -- the continuous-time sovereign debt model with partial default.
 
 Provides the model's primitives (Params, the endowment process ZProcess, utility, default costs),
 the policies (S, c, d) from maximizing the Hamiltonian at every node, the upwind generator of
-(B, z) given the drift S (Model), a pseudo-transient solver (solve), the ergodic density,
-diagnostics, and quick plots. The joint time-stepping solver used for the paper is in pdtimestep.py.
+(B, z) given the drift S (Model), the ergodic density, and diagnostics. The joint time-stepping
+solver is in pdtimestep.py.
 
 One model for three endowment processes:
   * 'none'  : z fixed (deterministic)
@@ -61,8 +61,16 @@ class Params:
     #                  "level"-> 1 - g2 (exp(z) - exp(ztilde))  (Arellano, Mateos-Planas, and Rios-Rull:
     #                           phi1 (z_level - z*), with z* = exp(ztilde))
     fixed_cost_form: str = "log"
-    # underwriting standard: no new issuance (l = S + a(d) B <= 0) at prices q < q_floor
+    # underwriting standard: new issuance l = S + a(d) B is capped by L(q), with L = 0 at prices q <= q_floor.
+    # q_band = 0: L jumps to no cap above q_floor (the hard standard). q_band > 0: L rises continuously over the
+    # band (q_floor, q_floor + q_band), L(q) = l_band w / (1 - w) with w = (q - q_floor) / q_band, and there is
+    # no cap above the band.
     q_floor: float = 0.0
+    q_band: float = 0.0
+    l_band: float = 0.1
+    # default intensity: use the closed form wherever it applies (the standard and the consumption floor are slack
+    # at it, and it is below one), and the line search elsewhere. False: the line search at every node.
+    closed_d: bool = False
 
     def __post_init__(self):
         if self.lam is None:
@@ -73,7 +81,8 @@ class Params:
         return np.array(
             [self.nu, self.rho, self.delta, self.kappa, self.r, self.lam,
              self.g0, self.g1, self.g2, self.ztilde, self.cmin_frac, self.S_cap, self.F_min,
-             1.0 if self.fixed_cost_form == "level" else 0.0, self.q_floor],
+             1.0 if self.fixed_cost_form == "level" else 0.0, self.q_floor, self.q_band, self.l_band,
+             1.0 if self.closed_d else 0.0],
             dtype=np.float64,
         )
 
@@ -213,6 +222,18 @@ def phi_fn(d, z, g0, g1, g2, ztilde, Fmin, form=0.0):
 
 
 @njit(cache=True)
+def issue_cap(q, qf, band, lband):
+    """Underwriting standard: (capped, L) with new issuance l <= L when capped. L = 0 for q < qf; with a band,
+    L = lband w / (1 - w), w = (q - qf) / band, for qf <= q < qf + band; no cap at higher prices."""
+    if q < qf:
+        return True, 0.0
+    if band > 0.0 and qf > 0.0 and q < qf + band:
+        w = (q - qf) / band
+        return True, lband * w / (1.0 - w)
+    return False, 0.0
+
+
+@njit(cache=True)
 def best_S(d, VB, q, B, z, y, p, mode):
     """Maximize u(c(S,d)) + S*VB over admissible S for a given d.
 
@@ -225,10 +246,10 @@ def best_S(d, VB, q, B, z, y, p, mode):
     caut = ph * y - (1.0 - d) * (delta + lam) * B          # consumption with zero issuance
     k = (delta - kappa * (delta + lam) * d) * B             # c = caut + q (S + k)
     cmin = cmf * y
-    no_issue = q < p[14]                                     # underwriting standard: l = S + k <= 0
+    capped, Lq = issue_cap(q, p[14], p[15], p[16])           # underwriting standard: l = S + k <= Lq
     # zero drift: S = 0, feasible if the consumption floor and the standard allow it
     if mode == 0:
-        if no_issue and k > 0.0:
+        if capped and k > Lq:
             return _NEG, 0.0, cmin
         c = caut + q * k
         if c < cmin:
@@ -240,8 +261,8 @@ def best_S(d, VB, q, B, z, y, p, mode):
     if S_lo < -Scap:
         S_lo = -Scap
     S_hi = Scap
-    if no_issue and S_hi > -k:
-        S_hi = -k
+    if capped and S_hi > Lq - k:
+        S_hi = Lq - k
     if mode == 1:
         if S_lo < 0.0:
             S_lo = 0.0
@@ -273,6 +294,24 @@ def best_node(VB, q, B, z, y, p, mode, n_golden):
     if not np.isfinite(Hb):
         Hb = _NEG
     db = 0.0
+    # Closed form for d > 0. Given S, d enters the Hamiltonian through consumption alone, so the optimum solves
+    # dc/dd = 0 whenever the bounds on S do not move with d. They move with d where the standard caps issuance and
+    # where the consumption floor binds. The maximized Hamiltonian is concave in d, so a root in (0, 1) at which
+    # both are slack is the maximum over d > 0, and the line search is skipped.
+    if p[17] > 0.5 and p[7] > 1.0 and B > 0.0:
+        Ff0 = F_fix(z, p[8], p[9], p[12], p[13])
+        rhs0 = (1.0 - p[3] * q) * (p[2] + p[5]) * B / (p[6] * p[7] * Ff0 * y)
+        if rhs0 > 0.0:
+            dc = rhs0 ** (1.0 / (p[7] - 1.0))
+            if dc < 1.0:
+                H, S, c = best_S(dc, VB, q, B, z, y, p, mode)
+                if H > -1.0e29 and c > p[10] * y * (1.0 + 1.0e-10):
+                    capped, Lq = issue_cap(q, p[14], p[15], p[16])
+                    kd = (p[2] - p[3] * (p[2] + p[5]) * dc) * B
+                    if (not capped) or S < Lq - kd - 1.0e-12:
+                        if H > Hb:
+                            return H, S, c, dc
+                        return Hb, Sb, cb, db
     # golden section on (0, 1] for the d > 0 branch (H*(d) concave; the infeasible set is an
     # initial segment because d = 1 is always feasible)
     a = 1.0e-9
@@ -317,11 +356,14 @@ def best_node(VB, q, B, z, y, p, mode, n_golden):
 
 
 @njit(parallel=True, cache=True)
-def policies(V, q, Bg, zg, yg, p, hf, hb, n_golden):
+def policies(V, q, Bg, zg, yg, p, hf, hb, n_golden, which_prev, tau):
     """Upwind policy at every node. Returns S, c, d, u, Hval, which, S_free (at Bmax), d_free.
     At each node the forward-difference (S >= 0), backward-difference (S <= 0), and zero-drift
     candidates are compared and the one with the largest Hamiltonian is kept.
-    hf[i] = B[i+1] - B[i], hb[i] = B[i] - B[i-1] (per-node spacings; equal on a uniform grid)."""
+    hf[i] = B[i+1] - B[i], hb[i] = B[i] - B[i-1] (per-node spacings; equal on a uniform grid).
+    which_prev, tau (arrays over nodes): where tau > 0 a node keeps the branch it had in which_prev (forward,
+    backward, or zero drift) unless another branch has a Hamiltonian higher by more than tau. At a node where two
+    branches are admissible and tie, the comparison otherwise flips from one step to the next."""
     nB = Bg.size
     nz = zg.size
     N = nB * nz
@@ -336,20 +378,31 @@ def policies(V, q, Bg, zg, yg, p, hf, hb, n_golden):
         B = Bg[i]; z = zg[j]; y = yg[j]; qq = q[i, j]
         bestH = -2.0e30
         bS = 0.0; bc = 1.0; bd = 0.0; bw = 0
+        tau_ = tau[i, j]
+        wp = which_prev[i, j] if tau_ > 0.0 else 9
+        pH = -2.0e30; pS = 0.0; pc = 1.0; pd = 0.0
         # forward, backward, and zero-drift candidates
         if i < nB - 1:
             VBf = (V[i + 1, j] - V[i, j]) / hf[i]
             H, S_, c_, d_ = best_node(VBf, qq, B, z, y, p, 1, n_golden)
             if H > bestH:
                 bestH = H; bS = S_; bc = c_; bd = d_; bw = 1
+            if wp == 1:
+                pH = H; pS = S_; pc = c_; pd = d_
         if i > 0:
             VBb = (V[i, j] - V[i - 1, j]) / hb[i]
             H, S_, c_, d_ = best_node(VBb, qq, B, z, y, p, -1, n_golden)
             if H > bestH:
                 bestH = H; bS = S_; bc = c_; bd = d_; bw = -1
+            if wp == -1:
+                pH = H; pS = S_; pc = c_; pd = d_
         H, S_, c_, d_ = best_node(0.0, qq, B, z, y, p, 0, n_golden)
         if H > bestH:
             bestH = H; bS = S_; bc = c_; bd = d_; bw = 0
+        if wp == 0:
+            pH = H; pS = S_; pc = c_; pd = d_
+        if wp != bw and pH > -1.0e29 and pH >= bestH - tau_:
+            bestH = pH; bS = pS; bc = pc; bd = pd; bw = wp
         if bestH < -1.0e29 or not np.isfinite(bestH):
             # no feasible candidate (should not happen): autarky fallback, flagged by which = 9
             bS = 0.0; bd = 1.0; bc = phi_fn(1.0, z, p[6], p[7], p[8], p[9], p[12], p[13]) * y; bw = 9
@@ -400,6 +453,63 @@ def policies_central(V, q, Bg, zg, yg, p, hf, hb, n_golden):
     return S, c, d, u, Hval, which, S_free, d_free
 
 
+@njit(cache=True)
+def line_sweep(cc, S, hf, hb, zup, zdn, b, x, tol, maxpass):
+    """Solve [diag(cc) - A(S)] x = b by line Gauss-Seidel, in place in x (the starting guess). A(S) is the upwind
+    generator of Model.assemble with a nearest-neighbor endowment process: coefficients zup[j] on (i, j+1) and
+    zdn[j] on (i, j-1). One pass solves every debt row exactly in the endowment direction (a tridiagonal
+    system), first with the rows in increasing order of debt, then in decreasing order, taking the neighboring rows
+    from the latest values. Each node is coupled to one neighboring row only, the one its drift points to, so a
+    region where the drift has one sign is solved exactly by the sweep that runs against the drift.
+    Stops when the largest residual is below tol. Returns (passes, largest residual)."""
+    nB, nz = x.shape
+    dg = np.empty(nz); rhs = np.empty(nz); cp = np.empty(nz)
+    res = 1.0e300
+    for it in range(maxpass):
+        for sweep in range(2):
+            for ii in range(nB):
+                i = ii if sweep == 0 else nB - 1 - ii
+                for j in range(nz):
+                    sp = S[i, j] if S[i, j] > 0.0 else 0.0
+                    sm = S[i, j] if S[i, j] < 0.0 else 0.0
+                    dg[j] = cc[i, j] + sp / hf[i] - sm / hb[i] + zup[j] + zdn[j]
+                    r = b[i, j]
+                    if i < nB - 1:
+                        r += sp / hf[i] * x[i + 1, j]
+                    if i > 0:
+                        r -= sm / hb[i] * x[i - 1, j]
+                    rhs[j] = r
+                # Thomas algorithm: -zdn[j] x[j-1] + dg[j] x[j] - zup[j] x[j+1] = rhs[j]
+                cp[0] = -zup[0] / dg[0]
+                rhs[0] = rhs[0] / dg[0]
+                for j in range(1, nz):
+                    den = dg[j] + zdn[j] * cp[j - 1]
+                    cp[j] = -zup[j] / den
+                    rhs[j] = (rhs[j] + zdn[j] * rhs[j - 1]) / den
+                x[i, nz - 1] = rhs[nz - 1]
+                for j in range(nz - 2, -1, -1):
+                    x[i, j] = rhs[j] - cp[j] * x[i, j + 1]
+        res = 0.0
+        for i in range(nB):
+            for j in range(nz):
+                sp = S[i, j] if S[i, j] > 0.0 else 0.0
+                sm = S[i, j] if S[i, j] < 0.0 else 0.0
+                r = (cc[i, j] + sp / hf[i] - sm / hb[i] + zup[j] + zdn[j]) * x[i, j] - b[i, j]
+                if i < nB - 1:
+                    r -= sp / hf[i] * x[i + 1, j]
+                if i > 0:
+                    r += sm / hb[i] * x[i - 1, j]
+                if j < nz - 1:
+                    r -= zup[j] * x[i, j + 1]
+                if j > 0:
+                    r -= zdn[j] * x[i, j - 1]
+                if abs(r) > res:
+                    res = abs(r)
+        if res < tol:
+            return it + 1, res
+    return maxpass, res
+
+
 # ----------------------------------------------------------------------------- model
 
 
@@ -441,6 +551,15 @@ class Model:
         self._zvals = np.concatenate([np.full(nB, v) for v in vals]) if J.size else np.zeros(0)
         self._zdiag = zdiag      # (nz,)
         self._k = k
+        # nearest-neighbor endowment process: coefficients on (j+1) and (j-1), for the line sweeps
+        self.zup = np.zeros(self.nz); self.zdn = np.zeros(self.nz)
+        self.z_tridiagonal = zp.kind in ("none", "ou")
+        if self.z_tridiagonal:
+            for jj, jp, v in zip(J, Jp, vals):
+                if jp == jj + 1:
+                    self.zup[jj] = v
+                else:
+                    self.zdn[jj] = v
 
     def assemble(self, S: np.ndarray) -> sp.csc_matrix:
         """Generator A of (B, z) for the drift field S (nB, nz): upwind in B (forward difference
@@ -457,11 +576,34 @@ class Model:
                           shape=(self.N, self.N))
         return A.tocsc()
 
-    def policies(self, V, q, n_golden=28):
-        """Policies given (V, q): upwind by default, central differences if scheme == 'central'."""
+    def solve_shifted(self, cc, S, b, x0, A=None, tol=1e-13, maxpass=60):
+        """Solve [diag(cc) - A(S)] x = b. Line sweeps from the guess x0 (line_sweep), with the sparse direct solve
+        as the fallback when they have not converged (pass the assembled A to avoid assembling it again). cc is a
+        scalar or an array over nodes; tol is relative to the largest right-hand side. Returns (x, passes), with
+        passes = -1 for the direct solve."""
+        cc = np.ascontiguousarray(np.broadcast_to(np.asarray(cc, dtype=np.float64).reshape(-1) if np.ndim(cc) else cc,
+                                                  (self.N,)).reshape(self.nB, self.nz))
+        b2 = np.ascontiguousarray(np.asarray(b, dtype=np.float64).reshape(self.nB, self.nz))
+        if self.z_tridiagonal:
+            x = np.array(x0, dtype=np.float64).reshape(self.nB, self.nz).copy()
+            n, r = line_sweep(cc, S, self.hf, self.hb, self.zup, self.zdn, b2, x, tol * max(1.0, float(np.abs(b2).max())), maxpass)
+            if n < maxpass and np.isfinite(r):
+                return x, n
+        if A is None:
+            A = self.assemble(S)
+        x = spla.spsolve(sp.diags(cc.ravel(), format="csc") - A, b2.ravel())
+        return x.reshape(self.nB, self.nz), -1
+
+    def policies(self, V, q, n_golden=28, which_prev=None, tau=0.0):
+        """Policies given (V, q): upwind by default, central differences if scheme == 'central'.
+        which_prev, tau: the branch held at each node and its threshold (see policies)."""
         if self.scheme == "central":
             return policies_central(V, q, self.B, self.z, self.y, self.p, self.hf, self.hb, n_golden)
-        return policies(V, q, self.B, self.z, self.y, self.p, self.hf, self.hb, n_golden)
+        if which_prev is None:
+            which_prev, tau = np.full((self.nB, self.nz), 9, dtype=np.int8), 0.0
+        if np.ndim(tau) == 0:
+            tau = np.full((self.nB, self.nz), float(tau))
+        return policies(V, q, self.B, self.z, self.y, self.p, self.hf, self.hb, n_golden, which_prev, tau)
 
     def initial_guess(self, q_init="static"):
         """V from consuming y - lam B (at least the consumption floor) forever; q = 1 ('one') or the steady-state price under the
@@ -521,73 +663,6 @@ class Result:
         return self.S + par.delta * B - par.kappa * (par.delta + par.lam) * self.d * B
 
 
-def solve(model: Model, V0=None, q0=None, *, dt0=1.0, dt_min=1e-3, dt_max=1e6, omega=0.5,
-          tolV=1e-7, tolq=1e-9, maxit=3000, n_golden=28, verbose=True, print_every=50,
-          q_init="static", ergodic=True, q_every=1) -> Result:
-    """Pseudo-transient iteration on V (adaptive dt) alternating with damped exact price solves.
-
-    omega = 0 keeps q fixed (pure HJB solve given q). Returns a Result with the ergodic density
-    when ergodic is True and nz > 1.
-    """
-    par = model.par
-    N = model.N
-    if V0 is None or q0 is None:
-        V0_, q0_ = model.initial_guess(q_init)
-        V = V0_ if V0 is None else V0.copy()
-        q = q0_ if q0 is None else q0.copy()
-    else:
-        V, q = V0.copy(), q0.copy()
-    I = sp.identity(N, format="csc")
-    dt = dt0
-    rV_prev = np.inf
-    hist = []
-    t0 = time.perf_counter()
-    converged = False
-    coupon = par.lam + par.delta
-    for it in range(1, maxit + 1):
-        # policies given (V, q), and the upwind generator for their drift
-        S, c, d, u, Hval, which, S_free, d_free = model.policies(V, q, n_golden)
-        A = model.assemble(S)
-        # residuals of the HJB equation and of the pricing equation
-        Vf, qf, uf, df = V.ravel(), q.ravel(), u.ravel(), d.ravel()
-        xi_flat = par.xi(df)
-        resV = par.rho * Vf - uf - A @ Vf
-        resq = xi_flat * qf - (1.0 - df) * coupon - A @ qf
-        rV = np.max(np.abs(resV))
-        rq = np.max(np.abs(resq))
-        hist.append((it, dt, rV, rq, float(S.min()), float(S.max()), float(q.min())))
-        if verbose and (it % print_every == 0 or it == 1):
-            print(f"it {it:5d} dt {dt:9.3g} resV {rV:9.2e} resq {rq:9.2e} "
-                  f"S[{S.min():+.3f},{S.max():+.3f}] q[{q.min():.3f},{q.max():.3f}] "
-                  f"d>0: {np.mean(d > 0):.2f}  t={time.perf_counter() - t0:6.1f}s", flush=True)
-        # stop when both residuals are below tolerance
-        if rV < tolV and (rq < tolq or omega == 0.0):
-            converged = True
-            break
-        # adaptive pseudo time step, driven by the HJB residual only
-        if rV < rV_prev:
-            dt = min(dt * 1.5, dt_max)
-        else:
-            dt = max(dt * 0.5, dt_min)
-        rV_prev = rV
-        # implicit HJB step
-        M =(par.rho + 1.0 / dt) * I - A
-        Vf_new = spla.spsolve(M, uf + Vf / dt)
-        V = Vf_new.reshape(model.nB, model.nz)
-        # price step: exact solve for the current policy, damped
-        if omega > 0.0 and it % q_every == 0:
-            Mq = sp.diags(xi_flat, format="csc") - A
-            qf_new = spla.spsolve(Mq, (1.0 - df) * coupon)
-            qf_new = np.clip(qf_new, 1e-12, 1.0 + 1e-12)
-            q = (qf + omega * (qf_new - qf)).reshape(model.nB, model.nz)
-    elapsed = time.perf_counter() - t0
-    if verbose:
-        print(f"{'converged' if converged else 'NOT converged'} in {it} iterations, "
-              f"{elapsed:.1f}s; resV {rV:.2e} resq {rq:.2e}")
-    g = ergodic_density(model, A) if (ergodic and model.nz > 1) else None
-    return Result(model, V, q, S, c, d, which, S_free, d_free, A, g, converged, it, rV, rq, hist, elapsed)
-
-
 def ergodic_density(model: Model, A: sp.csc_matrix) -> np.ndarray:
     """Stationary distribution: A^T g = 0, returned as probability MASS on nodes (nB,nz)."""
     N = model.N
@@ -604,7 +679,7 @@ def ergodic_density(model: Model, A: sp.csc_matrix) -> np.ndarray:
     s = g.sum()
     if s > 0:
         g /= s
-    # The pinned node (B = 0 in the lowest productivity state) may carry no stationary mass. Then the
+    # The pinned node (B = 0 in the lowest endowment state) may carry no stationary mass. Then the
     # pinned system is inconsistent and the solve returns a vector outside the null space. If the
     # residual is not small, iterate the forward equation implicitly (dt = 200) to the stationary density.
     res = float(np.abs(A.T @ g).max()) if s > 0 else np.inf
@@ -673,83 +748,3 @@ def diagnostics(res: Result, verbose=True) -> dict:
                   f"P(d>0) {out['frac_default']:.3f}, mass in top 3 B nodes {out['mass_top3']:.4f}, "
                   f"mass at d=1 {out['mass_d1']:.4f}, mean spread {out['mean_spread']:.4f}")
     return out
-
-
-def compare_on_common_grid(res_small: Result, res_big: Result, verbose=True) -> dict:
-    """Max abs differences of V, q, S, d on the B-range of the smaller model (same dB, same z)."""
-    ms, mb = res_small.model, res_big.model
-    assert abs(ms.dB - mb.dB) < 1e-12 and ms.nz == mb.nz
-    n = ms.nB
-    out = {}
-    for name in ["V", "q", "S", "d", "c"]:
-        a = getattr(res_small, name)
-        b = getattr(res_big, name)[:n, :]
-        out[name] = float(np.max(np.abs(a - b)))
-    if verbose:
-        print(f"  Bmax {ms.B[-1]:.2f} vs {mb.B[-1]:.2f}: max|dV| {out['V']:.2e}  max|dq| {out['q']:.2e}  "
-              f"max|dS| {out['S']:.2e}  max|dd| {out['d']:.2e}  max|dc| {out['c']:.2e}")
-    return out
-
-
-# ----------------------------------------------------------------------------- plotting
-
-
-def plot_1d(res: Result, path: str, title: str = "", j: int | None = None, labels=None):
-    """Quick plot of V, q, c, d, S, and issuance against B, one line per z."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    m = res.model
-    B = m.B
-    js = range(m.nz) if j is None else [j]
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-    panels = [("V", res.V), ("q", res.q), ("c", res.c), ("d", res.d), ("S = dB/dt", res.S), ("issuance l", res.issuance)]
-    for ax, (name, arr) in zip(axes.ravel(), panels):
-        for jj in js:
-            lab = labels[jj] if labels else f"z={m.z[jj]:+.3f}"
-            ax.plot(B, arr[:, jj], label=lab)
-        ax.set_title(name)
-        ax.set_xlabel("B")
-        if name.startswith("S") or name.startswith("issuance"):
-            ax.axhline(0, color="k", lw=0.5)
-        ax.grid(alpha=0.3)
-    axes[0, 0].legend(fontsize=8)
-    fig.suptitle(title)
-    fig.tight_layout()
-    fig.savefig(path, dpi=130)
-    plt.close(fig)
-
-
-def plot_2d(res: Result, path: str, title: str = ""):
-    """Quick contour plots of V, q, c, d, S, and the ergodic density on the (B, z) grid."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    m = res.model
-    B, z = m.B, m.z
-    BB, ZZ = np.meshgrid(B, z, indexing="ij")
-    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
-    panels = [("V", res.V, "viridis"), ("q", res.q, "viridis"), ("c", res.c, "viridis"),
-              ("d", res.d, "magma"), ("S = dB/dt", res.S, "RdBu_r")]
-    for ax, (name, arr, cmap) in zip(axes.ravel(), panels):
-        if name.startswith("S"):
-            vmax = np.max(np.abs(arr))
-            cf = ax.contourf(BB, ZZ, arr, levels=41, cmap=cmap, vmin=-vmax, vmax=vmax)
-            ax.contour(BB, ZZ, arr, levels=[0.0], colors="k", linewidths=1.5)
-        else:
-            cf = ax.contourf(BB, ZZ, arr, levels=41, cmap=cmap)
-        fig.colorbar(cf, ax=ax)
-        ax.set_title(name); ax.set_xlabel("B"); ax.set_ylabel("z")
-    ax = axes.ravel()[5]
-    if res.g is not None:
-        dens = res.g / (m.hcell[:, None] * (z[1] - z[0] if m.nz > 1 else 1.0))
-        cf = ax.contourf(BB, ZZ, dens, levels=41, cmap="inferno")
-        fig.colorbar(cf, ax=ax)
-        ax.contour(BB, ZZ, res.S, levels=[0.0], colors="w", linewidths=1.0)
-        ax.set_title("ergodic density (white: S=0)"); ax.set_xlabel("B"); ax.set_ylabel("z")
-    fig.suptitle(title)
-    fig.tight_layout()
-    fig.savefig(path, dpi=130)
-    plt.close(fig)

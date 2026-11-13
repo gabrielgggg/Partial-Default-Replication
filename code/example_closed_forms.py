@@ -1,13 +1,15 @@
-"""Closed-form numbers of the self-fulfilling example of Figure 5 (Proposition 4), at the illustrative parameters.
+"""Closed-form numbers of the self-fulfilling example (Figure det_multiplicity), at its own parameters.
 
-Prints d_first, s_first, (g1-1) xi(d_first) against delta, Omega(d_first), and the intensities d whose risk-neutral
-steady states pass Theta(d) <= rho - r < Omega(d) with q_r(d) >= the floor, mapped to debt B(d).
-The continuation condition of Proposition 4(c) is not checked here.
+Computes d_first, s_first, (g1-1) xi(d_first), Omega(d_first), and the intensities d whose risk-neutral steady
+states pass Theta(d) <= rho - r < Omega(d) with q_r(d) at or above the underwriting standard, mapped to debt B(d).
+The continuation condition above the steady state is not checked here.
+
+Reads and writes no file; prints a summary. Imported by text_numbers.py for the values.
 Usage: python code/example_closed_forms.py
 """
 import numpy as np
 
-# illustrative parameters and the closed forms
+# parameters of the example and the closed forms
 r = 0.039; lam = r; delta = 0.12; kappa = 0.7; g0 = 0.075; g1 = 1.5; F = 0.999; qf = 0.7; rho = 0.06
 cs = delta + lam
 a = lambda d: delta - kappa * cs * d

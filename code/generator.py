@@ -1,35 +1,33 @@
-"""generator.py -- rebuild the discretized model and its generator matrix from a saved diffusion solution
-(data/ou_main.npz or data/ou_best.npz: V, q, B, z, x, qf), and compute expected paths under the forward
-equation. Used for the impulse responses (no simulation, no sampling noise) and for density checks."""
-import os
-import sys
+"""Generator of the main solution and expected paths under the forward equation.
 
+model_from_solution rebuilds the discretized model and its generator matrix from a saved solution
+(data/ou_main.npz: V, q, S, c, d, B, z, x, qf, band, lband). expected_paths and expected_paths_from_states
+integrate the forward equation dg/dt = A^T g, which gives impulse responses without simulation.
+Imported by irf.py and text_numbers.py.
+"""
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, ROOT)
+from calutil import R_FIX
 
 
 def model_from_solution(a):
-    """Model, generator A and policies (S, c, d) consistent with the saved (V, q)."""
-    # calibrate2 reads the underwriting standard from the environment and sys.argv at import
-    os.environ["PD_QFLOOR"] = str(float(a["qf"]))
-    _argv = sys.argv; sys.argv = [sys.argv[0]]
-    import calibrate2 as C
-    sys.argv = _argv
-    from pdmodel import Model, ZProcess
-    par, zp0 = C.unpack(a["x"].astype(float))
-    assert abs(par.q_floor - float(a["qf"])) < 1e-12
+    """Model, parameters, generator A, and the saved policies (S, c, d) of a solution.
+
+    The saved policies are used as they are: the solver holds the upwind branch of a node where two branches
+    tie, so policies recomputed from (V, q) alone can differ from the converged ones at such nodes."""
+    from pdmodel import Model, Params, ZProcess
+    g0, g1, g2, zt, rho, kappa, delta, rho_z, sig_eps = a["x"].astype(float)
+    par = Params(nu=2.0, rho=float(rho), r=R_FIX, delta=float(delta), kappa=float(kappa), g0=float(g0),
+                 g1=float(g1), g2=float(g2), ztilde=float(zt), fixed_cost_form="level", S_cap=1.0,
+                 q_floor=float(a["qf"]), q_band=float(a["band"]), l_band=float(a["lband"]), closed_d=True)
     z = a["z"]
-    zp = ZProcess.ou(zp0.mu, zp0.sigma, z.size, zmin=float(z[0]), zmax=float(z[-1]))
+    mu = -np.log(rho_z); sigma = sig_eps / np.sqrt(1 - rho_z ** 2) * np.sqrt(2 * mu)
+    zp = ZProcess.ou(mu, sigma, z.size, zmin=float(z[0]), zmax=float(z[-1]))
     assert np.allclose(zp.z, z)
     m = Model(par, zp, 0.0, float(a["B"][-1]), a["B"].size)
-    # policies from the saved (V, q), checked against the saved policy if present
-    S, c, d, u, H, which, Sf, df = m.policies(a["V"], a["q"])
-    if "S" in a.files:
-        assert np.abs(S - a["S"]).max() < 1e-10, "policies do not match the saved solution"
+    S, c, d = a["S"], a["c"], a["d"]
     A = m.assemble(S)
     return m, par, A, S, c, d
 
@@ -65,25 +63,23 @@ def net_output(par, d, z):
 def expected_paths(a, T=12.0, dt=0.01, shock=-0.10):
     """Expected paths of output, consumption, default intensity, debt, spread, issuance and defaulted
     coupons under the forward equation dg/dt = A^T g (Crank-Nicolson in time), starting from the ergodic
-    distribution with productivity shifted by `shock`; and the same expectations under the ergodic
+    distribution with the endowment shifted by `shock`; and the same expectations under the ergodic
     distribution itself (the control, constant in time)."""
     m, par, A, S, c, d = model_from_solution(a)
     B, z = m.B, m.z
     g0 = a["g"] / a["g"].sum()
     coupon = par.delta + par.lam
-    # quantities whose expectations are tracked, on the (B, z) grid
     BB = B[:, None] * np.ones((1, z.size))
     fields = dict(y=np.exp(z)[None, :] * np.ones((B.size, 1)), yn=net_output(par, d, z), c=c, d=d, B=BB,
                   spread=coupon / a["q"] - (par.delta + par.r),
                   issue=S + par.delta * BB - par.kappa * coupon * d * BB, defc=d * coupon * BB)
-    # Crank-Nicolson step for the forward equation, factorized once
     nT = int(round(T / dt))
     N = m.N
     AT = A.T.tocsc()
     I = sp.identity(N, format="csc")
+    # Crank-Nicolson step, factorized once
     lu = spla.splu((I - 0.5 * dt * AT).tocsc())
     Mr = (I + 0.5 * dt * AT).tocsr()
-    # shocked distribution, then step forward and record the expectations
     g = shift_in_z(g0, z, shock).ravel()
     out = {"shock": {k: np.zeros(nT + 1) for k in fields}, "control": {k: np.zeros(nT + 1) for k in fields}}
     ctrl = {k: float((g0 * v).sum()) for k, v in fields.items()}
@@ -126,10 +122,12 @@ def expected_paths_from_states(a, states, T=12.0, dt=0.01, shock=-0.10):
     N = m.N
     AT = A.T.tocsc()
     I = sp.identity(N, format="csc")
+    # Crank-Nicolson step, factorized once
     lu = spla.splu((I - 0.5 * dt * AT).tocsc())
     Mr = (I + 0.5 * dt * AT).tocsr()
 
     def run(g):
+        """Expectations of the fields along the forward equation from the distribution g."""
         g = g.ravel().copy()
         out = {k: np.zeros(nT + 1) for k in fields}
         for t in range(nT + 1):

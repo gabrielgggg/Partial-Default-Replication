@@ -1,8 +1,10 @@
-"""Existence region of self-fulfilling partial default (risk-neutral sovereign, illustrative parameters, block
-construction with optimal waiting) in the plane (unconditional s.d. of the log endowment, impatience wedge).
+"""Region of self-fulfilling partial default with endowment shocks and a risk-neutral sovereign.
 
-For each s.d., counts equilibria on a wedge grid, then bisects every transition between "some" and "none".
-Writes data/sf_region/sd<sd>.npz with the counts and the transition wedges.
+At the parameters of the self-fulfilling example, in the plane of the unconditional s.d. of the log endowment and
+the impatience wedge: for each s.d., counts the equilibria of the block construction with optimal waiting
+(rn_diffusion.RN.check_free) on a wedge grid, then bisects every transition between "some" and "none".
+
+Reads no file. Writes data/sf_region/sd<sd>.npz with the counts and the transition wedges (read by collect_sf.py).
 Usage: python code/region.py sd [sd ...]
 """
 import os
@@ -11,18 +13,39 @@ import time
 
 import numpy as np
 
+from paths import DATA
 from rn_diffusion import RN
-from rn_scan_free import classify
 
 # OU mean reversion, the first default intensity, and the grids in d and in the wedge
 MU = 0.225
-from paths import DATA
 OUT = os.path.join(DATA, "sf_region")
 os.makedirs(OUT, exist_ok=True)
 D_FIRST = 0.08932
 U = np.linspace(0.0, 1.0, 60)
 D_GRID = D_FIRST + 1e-4 + (0.6 - D_FIRST) * U ** 2          # dense near the first default
 W_GRID = np.unique(np.round(np.geomspace(30, 600, 26)))     # bp
+
+
+def classify(r):
+    """First failed condition of a check_free result, or "EQ" if all hold."""
+    if r.get("collapsed"):
+        return "locus collapses"
+    if r["price_res"] > 1e-8:
+        return "price root not found"
+    if not r["floor"]:
+        return "below standard"
+    if not r["any_jump"]:
+        return "never jumps from zero"
+    if r["buyback_min"] < -1e-12:
+        return "buyback-and-wait beats B0"
+    if r["Dmin_free"] < -1e-10:
+        return "standing still better on (0,B0)"
+    if r["SBmax"] >= 0:
+        return "no attraction"
+    mm = r.get("march")
+    if mm is None or not mm["ok"]:
+        return "continuation fails"
+    return "EQ"
 
 
 def n_eq(sd, w):

@@ -1,37 +1,31 @@
-"""Impulse responses of the main solution to z - 0.10, by the forward equation.
+"""Impulse responses of the main solution to a fall of 0.10 in the log endowment, by the forward equation.
 
-Reads data/ou_main.npz. Writes data/irf.npz (read by make_figures.py) and data/irf_summary.md with the
-issuance and arrears decomposition.
+Two sets of expected paths over 21 years, each for the shocked economy and for the control without the shock:
+  data/irf.npz         from the ergodic distribution (keys t, shock_<field>, control_<field>);
+  data/irf_states.npz  from the mean endowment with debt at its ergodic mean, 25 percent below it, and 25 percent
+                       above it (keys t, EB, ybar, <i>_shock_<field>, <i>_control_<field> for i = 0, 1, 2).
+Fields: y, yn (output net of default costs), c, d, B, spread, issue, defc.
+
+Reads data/ou_main.npz. Writes data/irf.npz and data/irf_states.npz (read by make_figures.py and text_numbers.py).
 Usage: python code/irf.py
 """
 import os
 
 import numpy as np
 
-from pdutil import DATA
+from generator import expected_paths, expected_paths_from_states
+from paths import DATA
+
+T = 21.0                       # the figures show 20 years; the paths run past the frame
+MULTS = [1.0, 0.75, 1.25]      # initial debt, as multiples of its ergodic mean
 
 a = np.load(os.path.join(DATA, "ou_main.npz"))
-from generator import expected_paths
-
-# expected paths after the shock and in the control, saved for the figure
-tt, out = expected_paths(a)
+tt, out = expected_paths(a, T=T)
 np.savez(os.path.join(DATA, "irf.npz"), t=tt, **{f"{s}_{k}": v for s in out for k, v in out[s].items()})
-# differences from the control, scaled by mean output
-sh, co = out["shock"], out["control"]; yb = co["y"].mean(); dt = tt[1] - tt[0]
-dB = sh["B"] - co["B"]; kp = int(np.argmax(dB))
-di = (sh["issue"] - co["issue"]) / yb; dc = (sh["defc"] - co["defc"]) / yb; dd = sh["d"] - co["d"]
-kap = float(a["x"][5])
-# summary and the table by year
-lines = [f"# impulse response to z - 0.10 at the main solution (floor {float(a['qf'])})", "",
-         f"output on impact {100 * (sh['y'][0] - co['y'][0]) / yb:.2f}%; consumption {100 * (sh['c'][0] - co['c'][0]) / yb:.2f}%",
-         f"debt peak {100 * dB[kp] / yb:.2f}% of mean output at {tt[kp]:.1f} years; spread on impact {1e4 * (sh['spread'][0] - co['spread'][0]):.0f} bp",
-         f"default intensity: impact {dd[0]:.3f}, 2y {dd[int(2 / dt)]:.3f}, 5y {dd[int(5 / dt)]:.3f}, 10y {dd[int(10 / dt)]:.3f}",
-         f"cumulated to the peak: extra issuance {100 * di[:kp].sum() * dt:.2f}% of output; extra defaulted coupons {100 * dc[:kp].sum() * dt:.2f}% "
-         f"(arrears {100 * kap * dc[:kp].sum() * dt:.2f}%)",
-         f"issuance exceeds defaulted coupons until year {tt[np.where(di > dc)[0].max()] if (di > dc).any() else 0:.1f}", "",
-         "| year | issuance | defaulted coupons | d | debt |", "|---|---|---|---|---|"]
-for T in (0, 1, 2, 3, 5, 8, 10):
-    i = int(T / dt); lines.append(f"| {T} | {100 * di[i]:+.2f} | {100 * dc[i]:+.2f} | {dd[i]:+.3f} | {100 * dB[i] / yb:+.2f} |")
-txt = "\n".join(lines) + "\n"
-open(os.path.join(DATA, "irf_summary.md"), "w", encoding="utf-8").write(txt)
-print(txt)
+
+g = a["g"] / a["g"].sum()
+EB = float((g.sum(1) * a["B"]).sum())
+tt, res, ybar = expected_paths_from_states(a, [(m * EB, 0.0) for m in MULTS], T=T)
+np.savez(os.path.join(DATA, "irf_states.npz"), t=tt, EB=EB, ybar=ybar,
+         **{f"{i}_{s}_{k}": v for i, r in enumerate(res) for s in r for k, v in r[s].items()})
+print(f"impulse responses to {T:g} years; mean debt {EB:.3f}, mean net output {ybar:.4f}")

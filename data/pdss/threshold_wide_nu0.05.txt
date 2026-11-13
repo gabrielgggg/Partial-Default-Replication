@@ -1,8 +1,0 @@
-nu 0.05: s_first 47 bp; at wedge 80 bp exists=True (0.975, np.float64(1.2205000000000001), np.float64(0.816758051172349))
-   wedge   62.5 bp: none   (374s)
-   wedge   71.2 bp: exists (0.985, np.float64(1.2345000000000002), np.float64(0.7583273622856647))  (522s)
-   wedge   66.9 bp: none   (968s)
-   wedge   69.1 bp: none   (1426s)
-   wedge   70.2 bp: none   (1823s)
-   wedge   70.7 bp: exists (0.985, np.float64(1.2425000000000002), np.float64(0.742176169519401))  (1949s)
-nu 0.05: threshold wedge in [70.2, 70.7] bp (s_first 46.8 bp)

@@ -1,10 +1,11 @@
-"""Second-order coefficients of the cube-root expansion at the deterministic steady state
-(Theorem "cube-root law", Step 4 of its proof):
+"""Second-order coefficients of the cube-root expansion at the deterministic steady state:
     -S(B*+x) = beta x^{1/3} + Sigma1 x^{2/3} + O(x),   1 - q(B*+x) = alpha x^{2/3} + Q1 x + O(x^{4/3}),
     Sigma1 = -[2 a(d_first) B* alpha + beta^2 phi'(cbar)/phi(cbar) + 3 phi(cbar) (R_B + rho)/beta] / 4,
     Q1 = -Pi0 Sigma1 / beta^2,
 with phi = u'/|u''| (= c/nu for CRRA, so phi'/phi = 1/cbar), R_B = -(1-d_first)(delta+lambda) + a(d_first),
 Pi0 = (1-kappa)(delta+lambda) d_first, a(d) = delta - kappa (delta+lambda) d.
+
+Reads and writes no file. Imported by make_figures.py and numbers_main.py: second_order(consts, x).
 """
 import numpy as np
 

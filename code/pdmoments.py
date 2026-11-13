@@ -144,20 +144,6 @@ def simulate(S, d, c, q, Bg, zg, mu, sigma, kind_ou, Lam, T_years, steps_per_yea
     return out
 
 
-def simulate_result(res: Result, T_years=20000, steps_per_year=100, seed=1, B0=None, z0=0.0, burn=1000):
-    """One long simulation of a solution, burn-in dropped. Returns a dict of annual series."""
-    m = res.model; par = m.par; zp = m.zp
-    kind_ou = 1 if zp.kind == "ou" else 0
-    Lam = zp.Lambda if zp.kind == "jump" else np.zeros((m.nz, m.nz))
-    if B0 is None:
-        B0 = 0.5 * (m.B[0] + m.B[-1]) * 0.5
-    out = simulate(res.S, res.d, res.c, res.q, m.B, m.z, zp.mu, zp.sigma, kind_ou, Lam, T_years + burn,
-                   steps_per_year, B0, z0, seed, par.delta + par.lam, par.r, par.delta, *_phi_args(par))
-    out = out[:, burn:]
-    names = ["y", "cons", "debt_due", "debt_service", "def_coupons", "pd", "B", "spread", "d_eoy", "B_eoy", "z_eoy"]
-    return {n: out[k] for k, n in enumerate(names)}
-
-
 def moments(sim: dict, pd_thresh=0.0) -> dict:
     """Annual-accounting moments of one simulated path; output and consumption linearly detrended in logs."""
     y = sim["y"]; c = sim["cons"]

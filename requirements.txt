@@ -2,4 +2,3 @@ numpy==2.4.6
 scipy==1.18.0
 numba==0.65.1
 matplotlib==3.11.0
-# torch==2.8.0    only for code/pinn_solve.py (retraining the neural network on a GPU)

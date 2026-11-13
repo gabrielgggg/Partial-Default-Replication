@@ -1,25 +1,24 @@
-"""Exact marching solution of the deterministic (fixed z) discrete equilibrium.
+"""Node equations of the deterministic (fixed z) discrete equilibrium, for the marching solution.
 
 In the deterministic case the upwind discretization is triangular once the steady-state node
 i* is known: a node with S < 0 uses the backward difference and depends only on the node
-below it; a node with S > 0 depends only on the node above it. The solution proceeds in steps.
+below it; a node with S > 0 depends only on the node above it. A marching solution therefore
 
-  1. Find the candidate steady states: nodes where the zero-drift policy is self-consistent
-     (q* = q_ss(d*), d* = argmax of zero-drift consumption at that price).
-  2. March outward from each candidate, solving at every node the 2-equation system
+  1. finds the candidate steady states: nodes where the zero-drift policy is self-consistent
+     (q* = q_ss(d*), d* = argmax of zero-drift consumption at that price), zero_drift_fixed_points;
+  2. marches outward from each candidate, solving at every node the 2-equation system
 
         rho V_i = H(V_i, q_i)                               (HJB, one-sided difference)
         xi(d_i) q_i = (1-d_i)(lam+delta) + S_i * (one-sided difference of q)
 
      The HJB equation is monotone in V_i given q_i (unique root, bisection); the price
-     equation is then a scalar equation in q_i which is scanned on (0,1] to find *all* roots
-     (local multiplicity) and continued along the root closest to the previous node.
-  3. Verify at every node that the assumed one-sided candidate is the global maximum of the
-     three candidates (forward / backward / zero drift) given the marched neighbours.
+     equation is then a scalar equation in q_i which is scanned on (0,1] to find all of its roots
+     (node_solutions).
 
-The result solves the same discrete system as the iterative solvers and serves as a ground
-truth for the deterministic case. Node solves are compiled with numba.
-Library module, imported by pdmarch_branch.py.
+The march itself, which follows every consistent root, is in pdmarch_branch.py. to_result wraps a marched
+solution in a pdmodel.Result. Node solves are compiled with numba.
+
+Reads and writes no file. Imported by pdmarch_branch.py.
 """
 
 from __future__ import annotations
@@ -156,110 +155,6 @@ def zero_drift_fixed_points(B, z, y, p, nq, n_golden):
             n += 1
         qprev = qk; fprev = fk
     return n, qr, Vr, cr, dr, Hr
-
-
-def march(m: Model, istar: int, fp_index: int | None = None, verbose=False, nq=200, n_golden=40):
-    """March outward from steady-state node istar for every zero-drift fixed point there
-    (or only the fp_index-th). Returns a list of solution dicts."""
-    assert m.nz == 1
-    nB = m.nB
-    B = m.B; z = m.z[0]; y = m.y[0]; p = m.p; dB = m.dB
-    nfp, qf, Vf, cf, df, Hf = zero_drift_fixed_points(B[istar], z, y, p, 400, n_golden)
-    results = []
-    fp_range = range(nfp) if fp_index is None else [fp_index]
-    for f in fp_range:
-        V = np.full(nB, np.nan); q = np.full(nB, np.nan); S = np.zeros(nB); c = np.full(nB, np.nan)
-        d = np.full(nB, np.nan); which = np.zeros(nB, dtype=np.int8); nsol = np.zeros(nB, dtype=int)
-        # start at the steady state, march up (backward differences), then down (forward differences)
-        V[istar] = Vf[f]; q[istar] = qf[f]; c[istar] = cf[f]; d[istar] = df[f]
-        nsol[istar] = nfp
-        stop_up = stop_dn = None
-        for i in range(istar + 1, nB):
-            n, qr, Vr, Sr, cr, dr = node_solutions(V[i - 1], q[i - 1], -1, B[i], z, y, p, dB, nq, n_golden)
-            nsol[i] = n
-            if n == 0:
-                stop_up = i; break
-            k = int(np.argmin(np.abs(qr[:n] - q[i - 1])))
-            V[i] = Vr[k]; q[i] = qr[k]; S[i] = Sr[k]; c[i] = cr[k]; d[i] = dr[k]; which[i] = -1
-        for i in range(istar - 1, -1, -1):
-            n, qr, Vr, Sr, cr, dr = node_solutions(V[i + 1], q[i + 1], +1, B[i], z, y, p, dB, nq, n_golden)
-            nsol[i] = n
-            if n == 0:
-                stop_dn = i; break
-            k = int(np.argmin(np.abs(qr[:n] - q[i + 1])))
-            V[i] = Vr[k]; q[i] = qr[k]; S[i] = Sr[k]; c[i] = cr[k]; d[i] = dr[k]; which[i] = +1
-        # global check: the chosen one-sided candidate must beat the other two at every node
-        viol = []
-        for i in range(nB):
-            if not np.isfinite(V[i]):
-                continue
-            cands = {}
-            if i < nB - 1 and np.isfinite(V[i + 1]):
-                cands[1] = best_node((V[i + 1] - V[i]) / dB, q[i], B[i], z, y, p, 1, n_golden)[0]
-            if i > 0 and np.isfinite(V[i - 1]):
-                cands[-1] = best_node((V[i] - V[i - 1]) / dB, q[i], B[i], z, y, p, -1, n_golden)[0]
-            cands[0] = best_node(0.0, q[i], B[i], z, y, p, 0, n_golden)[0]
-            best = max(cands, key=cands.get)
-            if cands[best] > cands[int(which[i])] + 1e-9:
-                viol.append((i, int(which[i]), best, cands[best] - cands[int(which[i])]))
-        results.append(dict(istar=istar, Bstar=B[istar], qstar=qf[f], dstar=df[f], cstar=cf[f],
-                            V=V, q=q, S=S, c=c, d=d, which=which, nsol=nsol, viol=viol,
-                            stop_up=stop_up, stop_dn=stop_dn,
-                            consistent=(len(viol) == 0 and stop_up is None and stop_dn is None)))
-        if verbose:
-            print(f"  istar={istar} (B={B[istar]:.3f}) q*={qf[f]:.4f} d*={df[f]:.3f}: stop_up={stop_up} "
-                  f"stop_dn={stop_dn} violations={len(viol)} multi-root nodes={int(np.sum(nsol > 1))}")
-    return results
-
-
-def scan_steady_states(m: Model, verbose=True, n_golden=40, nq=100):
-    """Locally consistent zero-drift nodes: zero drift beats forward/backward once the two
-    neighbours are marched one step. Returns a list of (istar, fp_index, q*, d*, c*)."""
-    nB = m.nB
-    B = m.B; z = m.z[0]; y = m.y[0]; p = m.p; dB = m.dB
-    out = []
-    for istar in range(nB):
-        nfp, qf, Vf, cf, df, Hf = zero_drift_fixed_points(B[istar], z, y, p, 400, n_golden)
-        for f in range(nfp):
-            ok = True
-            if istar < nB - 1:
-                n, qr, Vr, Sr, cr, dr = node_solutions(Vf[f], qf[f], -1, B[istar + 1], z, y, p, dB, nq, n_golden)
-                if n:
-                    k = int(np.argmin(np.abs(qr[:n] - qf[f])))
-                    HF = best_node((Vr[k] - Vf[f]) / dB, qf[f], B[istar], z, y, p, 1, n_golden)[0]
-                    if HF > Hf[f] + 1e-9:
-                        ok = False
-                else:
-                    ok = False
-            if ok and istar > 0:
-                n, qr, Vr, Sr, cr, dr = node_solutions(Vf[f], qf[f], +1, B[istar - 1], z, y, p, dB, nq, n_golden)
-                if n:
-                    k = int(np.argmin(np.abs(qr[:n] - qf[f])))
-                    HB = best_node((Vf[f] - Vr[k]) / dB, qf[f], B[istar], z, y, p, -1, n_golden)[0]
-                    if HB > Hf[f] + 1e-9:
-                        ok = False
-                else:
-                    ok = False
-            if ok:
-                out.append((istar, f, qf[f], df[f], cf[f]))
-    if verbose:
-        print(f"scan: {len(out)} locally consistent steady-state candidates:")
-        for i, f, qs, ds, cs in out:
-            print(f"   B={B[i]:.4f}  q*={qs:.4f}  d*={ds:.4f}  c*={cs:.4f}")
-    return out
-
-
-def solve_deterministic(m: Model, verbose=True, n_golden=40, nq=200):
-    """Scan + march. Returns (list of consistent solutions, all candidates)."""
-    cands = scan_steady_states(m, verbose=verbose, n_golden=n_golden)
-    sols = []
-    for istar, f, qs, ds, cs in cands:
-        rs = march(m, istar, fp_index=f, verbose=verbose, nq=nq, n_golden=n_golden)
-        sols.extend(rs)
-    good = [s for s in sols if s["consistent"]]
-    if verbose:
-        print(f"{len(good)} globally consistent solution(s) out of {len(sols)} marched candidates")
-    return good, sols
 
 
 def to_result(m: Model, sol: dict) -> Result:

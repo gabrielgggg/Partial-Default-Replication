@@ -1,12 +1,11 @@
-parameters: g0 0.0759 g1 3.0665 g2 0.0815 ztilde -0.2864 rho 0.0618 kappa 0.3727 delta 0.1525 r=lam 0.0392; OU mu 0.1994 sigma 0.0729 sd 0.1154; q_floor 0.6
-closed forms at z=0: F 0.97970  B_pd(0,1) 0.4847  d_first 0.5167  B_fd(0,1) 1.8967  cbar 0.9810  beta 0.1724  alpha 0.5408  Sigma1 -0.2035  Q1 0.4255  sqrt-law 0.1487  a 0.0811  xi(1)/a 1.484  q_r(d_first) 0.5985  s_first 1286 bp  floor spread 1278 bp  wedge 225 bp
-jump: three states z = [-0.08  0.    0.08], eta = 0.0997, eps = 0.03, Bmax 1.0, 201 nodes
-jump: converged True residuals 1.0e-07 / 2.6e-09 in 18616 steps, 38s
-  E[B] 0.411; P(d>0) 0.074; mass top 3 nodes 8.77e-23
-  [jump] z=-0.0800: first default node 0.3500 (d there 0.4602); last positive-drift node 0.3400; full default from nan; floor binds from B = 0.72; q(Bmax) 0.4973; drift range [-0.0899, +0.0999]
-  [jump] z=+0.0000: first default node 0.4750 (d there 0.5174); last positive-drift node 0.4650; full default from nan; floor binds from B = 0.87; q(Bmax) 0.5497; drift range [-0.0931, +0.0876]
-  [jump] z=+0.0800: first default node 0.6150 (d there 0.5704); last positive-drift node 0.3400; full default from nan; floor binds from B = 1.0; q(Bmax) 0.5991; drift range [-0.0963, +0.0413]
-  state z=-0.080: mass 0.231, mass in default 0.074, E[B|state] 0.365, mode node 0.345 (mass 0.157)
-  state z=+0.000: mass 0.435, mass in default 0.000, E[B|state] 0.453, mode node 0.470 (mass 0.284)
-  state z=+0.080: mass 0.334, mass in default 0.000, E[B|state] 0.389, mode node 0.345 (mass 0.092)
+parameters: g0 0.0352 g1 2.6794 g2 0.0443 ztilde -0.2191 rho 0.0521 kappa 0.7000 delta 0.1278 r=lam 0.0392; OU mu 0.1088 sigma 0.0496 sd 0.1064; q_floor 0.575 band 0.03
+closed forms at z=0: F 0.99128  B_pd(0,1) 0.5655  d_first 0.4910  B_fd(0,1) 1.8675  cbar 0.9778  beta 0.1128  alpha 0.3271  Sigma1 -0.1314  Q1 0.2539  sqrt-law coefficient 0.1120  a 0.0109  xi(1)/a 4.600
+jump: two states z = +-0.0500, eta = 0.0544, Bmax 1.0, 201 nodes
+jump: converged True residuals 9.9e-08 / 4.0e-12 in 565 steps, 1s
+  Bbar(z) = [0.435 0.435]; ceiling binds [False False]; E[B] 0.440; P(d>0) 0.000; mass top 3 nodes 7.64e-20
+  [jump] z=-0.0500: first default node 0.4450 (d there 0.4423); last positive-drift node 0.4350; full default from 0.85; standard binds from B = 0.835; q(Bmax) 0.3552; drift range [-0.0148, +0.0813]
+  [jump] z=+0.0500: first default node 0.6400 (d there 0.5378); last positive-drift node 0.4350; full default from 0.96; standard binds from B = 0.9550000000000001; q(Bmax) 0.4329; drift range [-0.0329, +0.0394]
+  [jump] residuals on nodes with mass above 1e-10 (2 nodes): 9.9e-08 / 8.3e-17; largest pricing residual 4.0e-12 at B 0.950, z +0.050 (q 0.576, d 0.979, mass 1.6e-17); 0 nodes above 1e-6, from B nan; tie nodes 28
+  state z=-0.050: mass 0.500, mass in default 0.000, E[B|state] 0.440, mode node 0.440 (mass 0.500)
+  state z=+0.050: mass 0.500, mass in default 0.000, E[B|state] 0.440, mode node 0.440 (mass 0.500)
 done

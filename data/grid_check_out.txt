@@ -1,0 +1,11 @@
+B* 0.56547; left branch reaches B=0 with S 0.0690; basin S(0) 0.0729
+
+[mirror] V(0) = -19.131034, q min 0.70828, ODE default nodes below B*: 157
+mirror: max|R_V| 2.85e-05 (away from B*: 1.00e-05), max|R_q| 2.46e-02 (away: 2.12e-02); nodes with d>0 below B*: 157, S>0 below B*: 2827/2828
+
+[basin] V(0) = -19.121654, q min 0.70828, ODE default nodes below B*: 0
+basin: max|R_V| 2.35e-05 (away from B*: 2.66e-06), max|R_q| 1.33e-02 (away: 1.55e-04); nodes with d>0 below B*: 0, S>0 below B*: 2827/2828
+
+time stepping from the mirror candidate: 4000 steps, 82s, resV 3.7e-04 resq 7.5e-02
+  after: nodes with d>0 below B*: 5, q min 0.71287 at B=0.8500, max |q - q_mirror| below B*: 2.52e-02, max |V - V_mirror|: 5.33e-03
+  steady state node after stepping: 0.5642

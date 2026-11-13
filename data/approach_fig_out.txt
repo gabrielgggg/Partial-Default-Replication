@@ -1,0 +1,7 @@
+B* 0.56547; left branch reaches B=0 with S 0.0690; basin S(0) 0.0729
+B* 0.5655, B_2 0.5340, stretch width 0.0314 (3.14% of output)
+min price 0.9748 at B 0.5340; spread there 43 bp
+time in default on the approach: 1.083 years (13.0 months)
+time from zero debt to capacity: pessimistic 10.89 years, basin 14.47 years
+V(0): pessimistic -19.13103, basin -19.12165; consumption-equivalent loss 0.0562% 
+d on the stretch: from 0.491 to 0.494; S at B_2: pessimistic 0.0474, basin 0.0192
