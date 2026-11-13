@@ -64,6 +64,7 @@ macros for the numbers quoted in the text.
 | Figure E.2 | `sf_region.pdf` | `make_figures.py` | `sfregion.npz` |
 | Figure F.1 | `ou_irf_states.pdf` | `make_figures.py` | `irf_states.npz` |
 | Figure F.2 | `ou_saving_density.pdf` | `make_figures.py` | `ou_saving.npz`, `ou_main.npz` |
+| Figure F.3 | `ou_phase_saving.pdf` | `make_figures.py` | `ou_saving.npz`, `ou_main.npz` |
 | Table 1 | `tab_calibration.tex`, `tab_calibration_fixed.tex` | `text_numbers.py` | `ou_main.npz` |
 | Table 2 | `tab_fit.tex` | `text_numbers.py` | `main_moments.md` |
 | Table F.1 | `tab_robfloor_rows.tex` | `text_numbers.py` | `main_row.tex`, `robustness/` |

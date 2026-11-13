@@ -15,6 +15,7 @@ Reads (in data/):
   det_cuberoot                      det_fine.npz, det_floor.npz, ou_main.npz
   sf_region                         sfregion.npz
   ou_saving_density                 ou_main.npz, ou_saving.npz
+  ou_phase_saving                   ou_main.npz, ou_saving.npz
 Writes: output/<name>.pdf for each name above.
 
 Usage:  python code/make_figures.py [names...]   (names as above; default: all figures)
@@ -433,6 +434,36 @@ def fig_ou_slices():
     save(fig, "ou_slices")
 
 
+def draw_locus(ax, B, z, S, color=None, lw=1.6, ls=":"):
+    """The zero-drift locus in the (B, z) plane, found endowment row by row and lightly smoothed for display.
+    The stationary debt of a row is the first debt at which the drift turns from positive to non-positive (linear
+    interpolation between nodes). Rows in which the drift is negative from the lowest debt on rest at that debt and
+    are not drawn. Rows with a later crossing of the same kind have a second stationary debt, at the underwriting
+    standard. It continues the locus from its largest stationary debt along the price contour of the standard."""
+    from scipy.ndimage import gaussian_filter1d
+    color = RED if color is None else color
+    first, last = np.full(z.size, np.nan), np.full(z.size, np.nan)
+    for j in range(z.size):
+        k = np.nonzero((S[:-1, j] > 0) & (S[1:, j] <= 0))[0]
+        cross = lambda i: B[i] + (B[i + 1] - B[i]) * S[i, j] / (S[i, j] - S[i + 1, j])
+        if S[1, j] <= 0:
+            first[j] = B[0]
+        elif k.size:
+            first[j] = cross(k[0])
+        if k.size and (k.size > 1 or S[1, j] <= 0):
+            last[j] = cross(k[-1])
+    pos = np.isfinite(first) & (first > B[0])
+    if not pos.any():
+        return
+    x = first.copy()
+    x[pos] = gaussian_filter1d(first[pos], 1.0, mode="nearest")
+    ax.plot(x[pos], z[pos], color=color, lw=lw, ls=ls)
+    j0 = int(np.nanargmax(np.where(pos, x, np.nan)))
+    up = np.isfinite(last) & (z > z[j0]) & (last > x[j0] - 0.05)
+    if up.any():
+        ax.plot(np.r_[x[j0], gaussian_filter1d(last[up], 1.0, mode="nearest")], np.r_[z[j0], z[up]], color=color, lw=lw, ls=ls)
+
+
 def fig_ou_contours():
     """Contours of the price, the default intensity, and the ergodic density in the (B, z) plane, with the
     zero-drift locus (data/ou_main.npz)."""
@@ -458,7 +489,7 @@ def fig_ou_contours():
     lev = sorted(float(v[np.searchsorted(cum, share)]) for share in (0.50, 0.75, 0.90, 0.99))
     axes[2].contour(BB[1:], ZZ[1:], dens_s[1:], levels=lev, colors=[BLACK], linewidths=0.7)
     for ax in axes:
-        ax.contour(BB, ZZ, S, levels=[0.0], colors=[RED], linewidths=1.6, linestyles=":")
+        draw_locus(ax, B, z, S)
         ax.set_xlabel("debt $B$")
     axes[0].set_ylabel("log endowment $z$")
     axes[0].set_title("bond price $q$"); axes[1].set_title("default intensity $d$"); axes[2].set_title("ergodic density")
@@ -487,7 +518,7 @@ def fig_saving_density():
         cum = np.cumsum(v) / v.sum()
         lev = sorted(float(v[np.searchsorted(cum, share)]) for share in (0.50, 0.75, 0.90, 0.99))
         ax.contour(BB[sl], ZZ[sl], dens[sl], levels=lev, colors=[BLACK], linewidths=0.7)
-        ax.contour(BB, ZZ, S, levels=[0.0], colors=[RED], linewidths=1.6, linestyles=":")
+        draw_locus(ax, B, z, S)
         ax.axvline(0.0, color=GRAY, lw=0.6, ls=":")
         ax.set_xlim(lo, hi); ax.set_xlabel("debt $B$"); ax.set_title(title)
     axes[0].set_ylabel("log endowment $z$")
@@ -611,10 +642,73 @@ def fig_sf_region():
     save(fig, "sf_region")
 
 
+def fig_phase_saving():
+    """Phase diagram of the model with saving (data/ou_saving.npz) in the (B, z) plane: arrows in the expected
+    direction of motion (S, -mu z) at unit length in axis units, the zero-drift locus of debt, the zero-drift line
+    of the endowment, the price contour of the underwriting standard, and faint contours of the ergodic density."""
+    from scipy.interpolate import RegularGridInterpolator
+    from scipy.ndimage import gaussian_filter, gaussian_filter1d
+    p = load_ou()[1]
+    a = np.load(os.path.join(DATA, "ou_saving.npz"))
+    B, z, S, q = a["B"], a["z"], a["S"], a["q"]
+    BB, ZZ = np.meshgrid(B, z, indexing="ij")
+    lo = -0.25                                         # the frame shows debt from -0.25
+    fig, ax = plt.subplots(figsize=(0.62 * W, 0.5 * W))
+    # the stationary debt of each endowment row: the first debt at which the drift turns from positive to
+    # non-positive, lightly smoothed for display. Rows that rest at the asset limit are outside the frame.
+    first, last = np.full(z.size, np.nan), np.full(z.size, np.nan)
+    for j in range(z.size):
+        k = np.nonzero((S[:-1, j] > 0) & (S[1:, j] <= 0))[0]
+        cross = lambda i: B[i] + (B[i + 1] - B[i]) * S[i, j] / (S[i, j] - S[i + 1, j])
+        if S[1, j] > 0 and k.size:
+            first[j] = cross(k[0])
+        if k.size and B[k[-1]] > 0.5 and (k.size > 1 or S[1, j] <= 0):
+            last[j] = cross(k[-1])
+    pos = np.isfinite(first)
+    x = first.copy()
+    x[pos] = gaussian_filter1d(first[pos], 1.0, mode="nearest")
+    ax.plot(x[pos], z[pos], color=RED, lw=1.4)
+    # the second stationary debt of a row, at the standard: it continues the locus from its largest stationary debt
+    # along the price contour of the standard, where there is no mass (thin line)
+    j0 = int(np.nanargmax(np.where(pos, x, np.nan)))
+    up = np.isfinite(last) & (z > z[j0])
+    ax.plot(np.r_[x[j0], gaussian_filter1d(last[up], 1.0, mode="nearest")], np.r_[z[j0], z[up]], color=RED, lw=0.9)
+    ax.axhline(0.0, color=BLUE, lw=1.4, ls="--")
+    ax.contour(BB[1:], ZZ[1:], q[1:], levels=[float(a["qf"])], colors=[BLUE], linewidths=1.3, linestyles=":")
+    # ergodic density, smoothed for display as in fig_ou_contours: contours that enclose 50, 75, and 90 percent of
+    # the mass, without the mass at the asset limit (the first debt node)
+    dens = a["g"] / a["g"].sum() / ((B[1] - B[0]) * (z[1] - z[0]))
+    dens[1:] = gaussian_filter(dens[1:], sigma=(4.0, 3.0), mode="nearest")
+    v = np.sort(dens[1:].ravel())[::-1]
+    cum = np.cumsum(v) / v.sum()
+    lev = sorted(float(v[np.searchsorted(cum, share)]) for share in (0.50, 0.75, 0.90))
+    ax.contour(BB[1:], ZZ[1:], dens[1:], levels=lev, colors=[BLACK], linewidths=0.6, alpha=0.35)
+    # direction field on a coarse grid
+    bq = np.linspace(lo + 0.04 * (B[-1] - lo), B[-1] - 0.04 * (B[-1] - lo), 13)
+    zq = np.linspace(z[0] * 0.92, z[-1] * 0.92, 11)
+    Bq, Zq = np.meshgrid(bq, zq, indexing="ij")
+    U = RegularGridInterpolator((B, z), S)(np.stack([Bq.ravel(), Zq.ravel()], 1)).reshape(Bq.shape)
+    xr, yr = B[-1] - lo, z[-1] - z[0]
+    un, vn = U / xr, -p["mu"] * Zq / yr
+    n = np.hypot(un, vn); n[n == 0] = 1
+    ax.quiver(Bq, Zq, un / n * xr, vn / n * yr, angles="xy", scale_units="xy", scale=1 / 0.045, color=GRAY, alpha=0.55,
+              width=0.0035, headwidth=4, headlength=4.5, headaxislength=4)
+    ax.set_xlim(lo, B[-1]); ax.set_ylim(z[0], z[-1])
+    ax.set_xlabel("debt $B$"); ax.set_ylabel("log endowment $z$")
+    ax.text(-0.15, -0.014, r"$\dot z=0$", color=BLUE, fontsize=9.5, va="top")
+    ax.text(-0.17, 0.103, r"$\dot B=0$", color=RED, fontsize=9.5, va="bottom")
+    ax.text(0.785, -0.079, r"$q=\underline{q}$", color=BLUE, fontsize=9.5)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+    fig.tight_layout()
+    save(fig, "ou_phase_saving")
+
+
 ALL = dict(episode_one=fig_episode_one, regions=fig_regions, det_policies=fig_det, det_multiplicity=fig_multiplicity,
            jump_policies=fig_jump, ou_slices=fig_ou_slices, ou_contours=fig_ou_contours, ou_irf=fig_irf,
            episode_typical=fig_episode_typical, det_cuberoot=fig_cuberoot, sf_region=fig_sf_region,
-           ou_irf_states=fig_irf_states, ou_saving_density=fig_saving_density)
+           ou_irf_states=fig_irf_states, ou_saving_density=fig_saving_density,
+           ou_phase_saving=fig_phase_saving)
 if __name__ == "__main__":
     names = sys.argv[1:] or list(ALL)
     for n in names:
