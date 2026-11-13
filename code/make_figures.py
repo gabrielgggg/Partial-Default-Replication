@@ -396,9 +396,26 @@ def fig_jump():
 
 
 # ============================================================ diffusion model at the calibrated parameters
+def spread_density(ax, a, p):
+    """Ergodic density of the spread, in percent, on a log scale, with a vertical line at the spread of the
+    underwriting standard. The spread of a node is (delta + lambda)/q - (delta + r). The density is a histogram of
+    the nodes weighted by their ergodic mass, smoothed for display."""
+    from scipy.ndimage import gaussian_filter1d
+    coupon, base = p["delta"] + p["lam"], p["delta"] + p["r"]
+    w = a["g"] / a["g"].sum()
+    sp = 100 * (coupon / a["q"] - base)
+    edges = np.linspace(0.0, 20.0, 401)
+    h = np.histogram(sp.ravel(), bins=edges, weights=w.ravel())[0] / (edges[1] - edges[0])
+    ax.plot(0.5 * (edges[1:] + edges[:-1]), gaussian_filter1d(h, 4.0, mode="nearest"), color=BLACK)
+    sf = 100 * (coupon / float(a["qf"]) - base)
+    ax.axvline(sf, color=BLUE, lw=1.3, ls=":")
+    ax.set_yscale("log"); ax.set_ylim(1e-4, 2.0); ax.set_xlim(0.0, 17.0)
+    ax.annotate(r"$q=\underline{q}$", xy=(sf + 0.4, 0.6), color=BLUE, fontsize=7.5)
+
+
 def fig_ou_slices():
     """Value, price, consumption, default intensity, and drift against debt at four endowment levels, and the
-    ergodic density of debt (data/ou_main.npz)."""
+    ergodic density of the spread (data/ou_main.npz)."""
     a, p = load_ou()
     B, z, V, q, c, d, S, g = a["B"], a["z"], a["V"], a["q"], a["c"], a["d"], a["S"], a["g"]
     # endowment levels shown: one and two stationary standard deviations below and above the mean. The lowest is
@@ -406,8 +423,6 @@ def fig_ou_slices():
     # one line shows the region without a fixed cost.
     sd = p["sd"]
     js = [int(np.where(z < p["zt"])[0].max())] + [int(np.argmin(np.abs(z - k * sd))) for k in (-1, 1, 2)]
-    w = g / g.sum(); gB = w.sum(1); h = B[1] - B[0]
-    Bg = B
     B, V, q, c, d, S = (v[:-1] for v in (B, V, q, c, d, S))   # drop the top node, where the state constraint shapes the policies
     labs = [f"${k:+d}$ s.d." for k in (-2, -1, 1, 2)]      # in stationary standard deviations of the log endowment
     fig, axes = plt.subplots(2, 3, figsize=(W, 0.6 * W))
@@ -418,16 +433,14 @@ def fig_ou_slices():
         line(axes[1, 0], *with_break(B, d[:, j]), k, labs[k])
         line(axes[1, 1], B, S[:, j], k, labs[k])
     zero_line(axes[1, 1])
-    from scipy.ndimage import gaussian_filter1d
-    gB_s = gaussian_filter1d(gB[1:] / h, sigma=3, mode="nearest")   # display only: the grid marginal has spikes at the thresholds of the z nodes
-    axes[1, 2].plot(Bg[1:], gB_s, color=BLACK)
-    axes[1, 2].annotate(f"mass at $B=0$: {gB[0]:.2f}", xy=(0.40, 0.84), xycoords="axes fraction", fontsize=7.5)
+    spread_density(axes[1, 2], a, p)
     titles = ["value $V(B,z)$", "bond price $q(B,z)$", "consumption $c(B,z)$",
-              "default intensity $d(B,z)$", "drift of debt $S(B,z)$", "ergodic density of debt"]
+              "default intensity $d(B,z)$", "drift of debt $S(B,z)$", "ergodic density of the spread"]
     for ax, t in zip(axes.ravel(), titles):
         ax.set_title(t)
-    for ax in axes[1]:
+    for ax in axes[1, :2]:
         ax.set_xlabel("debt $B$")
+    axes[1, 2].set_xlabel("spread, percent")
     handles, labels_ = axes[0, 1].get_legend_handles_labels()
     fig.legend(handles, labels_, loc="lower center", ncol=4, handlelength=2.4, bbox_to_anchor=(0.5, -0.03))
     fig.tight_layout(w_pad=1.2, h_pad=1.0, rect=(0, 0.04, 1, 1))
