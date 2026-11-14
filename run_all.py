@@ -77,9 +77,14 @@ def calibrate():
     run("cal_adopt", "cal_adopt.py")
 
 
-# the nine jobs of the self-fulfilling region with shocks: lists of standard deviations of the log endowment
+# the jobs of the self-fulfilling region with shocks: lists of standard deviations of the log endowment; the last
+# three cover the corner where the region closes, on a linear grid of wedges from 70 to 200 basis points and with
+# 240 default intensities in place of 60 (near the corner few intensities support an equilibrium)
+CORNER = "--wedges 70 200 10 --dpoints 240 "
 REGION = ["0 0.03 0.07 0.11", "0.0025 0.035 0.075 0.115", "0.005 0.04 0.08 0.12", "0.0075 0.045 0.085",
-          "0.01 0.05 0.09", "0.015 0.055 0.095", "0.02 0.06 0.1", "0.025", "0.065"]
+          "0.01 0.05 0.09", "0.015 0.055 0.095", "0.02 0.1", "0.025",
+          CORNER + "0.06 0.065 0.066 0.067 0.068", CORNER + "0.069 0.07 0.071 0.072 0.073",
+          CORNER + "0.074 0.075 0.076 0.078 0.08"]
 
 
 def solve(evaluate_only):
@@ -92,7 +97,8 @@ def solve(evaluate_only):
               ("pdss_sweep", "pdss_sweep.py")]
              + [(f"threshold_nu{nu}", "pdss_threshold.py", nu) for nu in ("1.0", "2.0", "4.0")]
              + [(f"threshold_wide_nu{nu}", "pdss_threshold.py", nu, "--wide") for nu in ("0.5", "0.25", "0.1", "0.05", "0.02")]
-             + [("region_" + sds.split()[0], "region.py", *sds.split()) for sds in REGION])
+             + [("region_" + ("corner_" + sds.split()[-1] if sds.startswith("--") else sds.split()[0]), "region.py", *sds.split())
+                for sds in REGION])
     run("collect_sf", "collect_sf.py")
     parallel([(f"robustness_{case}", "robustness.py", case, maxit) for case, maxit in
               [("fine", 8000), ("wide", 8000), ("nz51", 8000), ("nz101", 8000), ("z30", 6000), ("z35", 6000),

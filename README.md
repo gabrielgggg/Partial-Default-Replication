@@ -97,7 +97,7 @@ parameters and does not depend on the calibration.
 | `wedge_search.py` | the two equilibria of the example (Figure 4) | `wedge/rho0.060_illus.npz` | 10 min |
 | `pdss_sweep.py` | the steady states of the example reached from zero debt | `pdss/sweep_0.06.txt` | 5 min |
 | `pdss_threshold.py <nu> [--wide]` | the smallest impatience wedge with a self-fulfilling path, for eight values of risk aversion | `pdss/threshold_*.txt` | 3-35 min each |
-| `region.py <sd ...>` | the self-fulfilling region with shocks, in nine jobs | `sf_region/sd*.npz` | 5.5 hours in total |
+| `region.py <sd ...>` | the self-fulfilling region with shocks, in eleven jobs | `sf_region/sd*.npz` | 8 hours in total |
 | `collect_sf.py` | collects the two panels of Figure E.2 | `sfregion.npz` | <1 min |
 
 **Second group.** These read the main solution.

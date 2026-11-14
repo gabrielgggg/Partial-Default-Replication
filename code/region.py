@@ -5,7 +5,7 @@ the impatience wedge: for each s.d., counts the equilibria of the block construc
 (rn_diffusion.RN.check_free) on a wedge grid, then bisects every transition between "some" and "none".
 
 Reads no file. Writes data/sf_region/sd<sd>.npz with the counts and the transition wedges (read by collect_sf.py).
-Usage: python code/region.py sd [sd ...]
+Usage: python code/region.py [--wedges lo hi step] [--dpoints n] sd [sd ...]   (--wedges: a linear wedge grid in bp)
 """
 import os
 import sys
@@ -69,7 +69,17 @@ def bisect(sd, lo, hi, n_lo, iters=7):
 
 
 if __name__ == "__main__":
-    for sd in [float(s) for s in sys.argv[1:]]:
+    args = sys.argv[1:]
+    if "--wedges" in args:                                  # --wedges lo hi step: a linear wedge grid (bp), for the corner
+        k = args.index("--wedges")
+        lo_, hi_, st_ = (float(x) for x in args[k + 1:k + 4])
+        W_GRID = np.arange(lo_, hi_ + 0.5 * st_, st_)
+        del args[k:k + 4]
+    if "--dpoints" in args:                                 # --dpoints n: a finer grid of default intensities
+        k = args.index("--dpoints")
+        D_GRID = D_FIRST + 1e-4 + (0.6 - D_FIRST) * np.linspace(0.0, 1.0, int(args[k + 1])) ** 2
+        del args[k:k + 2]
+    for sd in [float(s) for s in args]:
         t0 = time.time()
         counts, info = [], []
         for w in W_GRID:
