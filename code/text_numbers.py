@@ -281,6 +281,7 @@ put("txCalSearchStd", f"{jc_['search_level'] or jc_['level']:g}", "standard sele
 gap_ = max(np.abs(np.load(f_)["x"] / x - 1).max() for f_ in glob.glob(os.path.join(CAL, "cma_*_best.npz")))
 check("the searches end at nearly the same parameters", gap_ < 0.2, f"largest proportional gap {gap_:.2f}")
 put("txStdLevel", f"{qf:g}", "level of the standard")
+put("txStdLossPct", f"{100 * (1 - qf):g}", "expected loss at the standard, percent (lambda = r)")
 put("txKappa", f"{kap:.2f}", "recovery factor")
 put("txDelta", f"{dl:.3f}", "maturity rate")
 
