@@ -49,7 +49,7 @@ jmp = np.load(os.path.join(DATA, "jump_floor.npz"))
 resq = float(re.search(r"residuals [0-9.e+-]+ / ([0-9.e+-]+)", read("illustrations_jump.log")).group(1))
 
 # calibration loss of the main solution
-loss = float(re.search(r"^\| loss \(AMR weights\) \|[^|]*\|[^|]*\| ([0-9.]+)", read("main_moments.md"), re.M).group(1))
+loss = float(am["loss"])      # unrounded, from the solution file: main_moments.md carries four decimals
 
 # macro name -> value
 vals = {

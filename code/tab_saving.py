@@ -29,7 +29,7 @@ rows = [("pd_freq", "Partial default: frequency", 2), ("pd_mean_cond", "Partial 
         ("pd_sd_cond", "Partial default: s.d. $\\mid d>0$", 2), ("debt_y_mean", "Debt to output: mean", 2),
         ("debt_y_sd", "Debt to output: s.d.", 2), ("ds_y_mean", "Debt service to output: mean", 3),
         ("ds_y_sd", "Debt service to output: s.d.", 3), ("dd_y_mean", "Debt due to output: mean", 3),
-        ("spread_sd", "Spread: s.d.", 3), ("y_persist", "Output: persistence", 2), ("y_sd", "Output: s.d.", 2),
+        ("spread_sd", "Spread: s.d.", 3), ("y_persist", "Output: persistence", 2), ("y_sd", "Output: s.d.", 3),
         None,
         ("dc_y_mean_cond", "Defaulted coupons to output: mean $\\mid d>0$", 3),
         ("dc_y_sd_cond", "Defaulted coupons to output: s.d. $\\mid d>0$", 3), ("spread_mean", "Spread: mean", 3),
