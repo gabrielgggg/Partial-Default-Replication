@@ -14,6 +14,10 @@ writes as LaTeX macros. It can do so at three depths:
 | `python run_all.py --solve` | recomputes the results at the reported calibration, then builds the exhibits | 10 hours of single-job time, of which 8 are the self-fulfilling example; jobs run in parallel |
 | `python run_all.py --calibrate` | runs the calibration search, adopts its best point, then does everything `--solve` does | the search takes 6 hours on a 96-core node |
 
+An experimental port of the code to C and CUDA, aimed at speed and written automatically by Grok Bot, is available at
+[gabrielgggg/Partial-Default-Replication-CUDA](https://github.com/gabrielgggg/Partial-Default-Replication-CUDA). It
+is not part of this package.
+
 ## Requirements
 
 - Python 3.10 or later, with the packages in `requirements.txt`:
