@@ -15,8 +15,10 @@ writes as LaTeX macros. It can do so at three depths:
 | `python run_all.py --calibrate` | runs the calibration search, adopts its best point, then does everything `--solve` does | the search takes 6 hours on a 96-core node |
 
 An experimental port of the code to C and CUDA, aimed at speed and written automatically by Grok Bot, is available at
-[gabrielgggg/Partial-Default-Replication-CUDA](https://github.com/gabrielgggg/Partial-Default-Replication-CUDA). It
-is not part of this package.
+[gabrielgggg/Partial-Default-Replication-CUDA](https://github.com/gabrielgggg/Partial-Default-Replication-CUDA), and an
+experimental neural-network (gPINN) solver for the diffusion model, written automatically by Gemini Neon, is available
+at [gabrielgggg/Partial-Default-PINN](https://github.com/gabrielgggg/Partial-Default-PINN). They are not part of this
+package.
 
 ## Requirements
 
